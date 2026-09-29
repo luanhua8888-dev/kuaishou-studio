@@ -1,0 +1,13 @@
+{
+  "name": "kuaishou-downloader",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node download_kuaishou.js",
+    "ui": "node server.js",
+    "ig:login": "node ig_poster.js login"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "intervalSeconds": 3600,
+  "sheetId": "YOUR_GOOGLE_SHEET_ID",
+  "sheetGid": 0,
+  "serviceAccountKeyFile": "google-service-account.json"
+}
