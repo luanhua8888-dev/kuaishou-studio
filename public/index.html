@@ -671,7 +671,7 @@
           autocomplete="off"
         />
         <button id="btnRun" class="btn btn-primary">
-          <span>Bắt đầu từ A1</span>
+          <span>Bắt đầu</span>
         </button>
       </div>
 
@@ -681,7 +681,6 @@
             <strong style="color:#f8fafc;">Tự động lấy link từ Google Sheets</strong>
             <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Dán link Kuaishou từ ô A1, mỗi dòng một link. Bấm Bắt đầu để quét từ A1; mỗi lượt xử lý một link rồi xóa ô, kể cả khi link lỗi. Hết link sẽ tự dừng.</div>
           </div>
-          <button id="sheetToggle" class="btn" type="button">Đang tải...</button>
         </div>
         <a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style="display:inline-block; margin-top:10px; color:#93c5fd; font-size:13px;">Mở bảng Google Sheets</a>
         <div id="sheetStatus" style="font-size:13px; color:var(--text-muted); margin-top:10px;" aria-live="polite"></div>
@@ -876,7 +875,6 @@
   <script>
     const urlInput = document.getElementById('urlInput');
     const btnRun = document.getElementById('btnRun');
-    const sheetToggle = document.getElementById('sheetToggle');
     const sheetStatus = document.getElementById('sheetStatus');
     const sheetCountdown = document.getElementById('sheetCountdown');
     let sheetEnabled = false;
@@ -920,10 +918,10 @@
       sheetRunning = data.running;
       sheetNextRunAt = data.nextRunAt;
       updateSheetCountdown();
-      sheetToggle.textContent = data.enabled ? 'Tạm dừng tự động' : 'Bật tự động';
+      const latestThreadsWarning = data.items?.find(item => item.warning)?.warning;
       sheetStatus.textContent = data.connectionError
         || data.error
-        || (data.enabled ? `Đang chạy · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng');
+        || `${data.enabled ? `Đang chạy · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng'}${latestThreadsWarning ? ` · Threads: ${latestThreadsWarning}` : ''}`;
     }
 
     async function refreshSheetQueue() {
@@ -933,13 +931,6 @@
       } catch (error) { sheetStatus.textContent = `Không đọc được trạng thái bảng: ${error.message}`; }
     }
 
-    sheetToggle.addEventListener('click', async () => {
-      const response = await fetch('/api/sheet-queue', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !sheetEnabled, runNow: !sheetEnabled, options: sheetOptions() })
-      });
-      renderSheetQueue(await response.json());
-    });
     refreshSheetQueue();
     setInterval(refreshSheetQueue, 5000);
     setInterval(updateSheetCountdown, 1000);
@@ -1022,14 +1013,7 @@
       swCardTikTok.classList.toggle('active-tiktok', chkAutoPostTikTok.checked);
       swCardFB.classList.toggle('active-fb', chkAutoPostFB.checked);
 
-      const targets = [];
-      if (chkAutoPostIG.checked) targets.push('IG');
-      if (chkAutoPostTikTok.checked) targets.push('TikTok');
-      if (chkAutoPostFB.checked) targets.push('Facebook');
-
-      btnRun.textContent = !urlInput.value.trim()
-        ? 'Bắt đầu từ A1'
-        : targets.length === 0 ? 'Chỉ tải về máy' : `Xử lý link · ${targets.join(' + ')}`;
+      btnRun.textContent = 'Bắt đầu';
     }
 
     // Click anywhere on card to toggle
@@ -1174,6 +1158,10 @@
     async function handleRun() {
       const input = urlInput.value.trim();
       if (!input) {
+        if (sheetEnabled) {
+          showStatus('Hàng đợi đang chạy. Lượt tiếp theo sẽ theo đồng hồ bên dưới.', 'loading');
+          return;
+        }
         btnRun.disabled = true;
         try {
           const response = await fetch('/api/sheet-queue', {
@@ -1276,6 +1264,8 @@
         } else {
           successMsg += ` Đã lưu vào: ${data.downloadPath}`;
         }
+        if (data.threadsCrosspostEnabled) successMsg += ' Đã bật chia sẻ sang Threads trên Instagram.';
+        if (data.threadsWarning) successMsg += ` Threads: ${data.threadsWarning}`;
         showStatus(successMsg, 'success');
 
         btnOpenFolder.style.display = data.downloadPath ? 'inline-flex' : 'none';

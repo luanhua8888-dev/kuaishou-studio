@@ -131,10 +131,10 @@ function formatMoodQuote(rawText, maxLineLen = 39, maxLines = 3) {
 function roundedCaptionFilter(quoteText, fontPath, textPath) {
   const lines = quoteText.split('\n');
   const longest = Math.max(...lines.map(line => Array.from(line).length));
-  const width = Math.min(1000, Math.max(240, Math.ceil(longest * 24 + 84)));
-  const height = lines.length * 64 + 58;
+  const width = Math.min(1000, Math.max(140, Math.ceil(longest * 16 + 40)));
+  const height = lines.length * 44 + 36;
   const x = Math.round((1080 - width) / 2);
-  const y = Math.round((1920 - height) / 2 + 280);
+  const y = Math.round((1920 - height) / 2 + 400);
   function roundedBox(boxX, boxY, boxWidth, boxHeight, color) {
     const slices = [
       [20, 0, 4], [11, 4, 4], [6, 8, 4], [3, 12, 4], [1, 16, 4],
@@ -149,7 +149,7 @@ function roundedCaptionFilter(quoteText, fontPath, textPath) {
   const shadow = roundedBox(x + 3, y + 8, width, height, 'black@0.10');
   const rim = roundedBox(x, y, width, height, 'white@0.04');
   const panel = roundedBox(x + 2, y + 2, width - 4, height - 4, '0x111925@0.52');
-  return `,${shadow},${rim},${panel},drawtext=fontfile='${fontPath}':textfile='${textPath}':fontcolor=white:expansion=none:fontsize=42:line_spacing=22:text_align=center:x=(w-text_w)/2:y=(h-text_h)/2+280:shadowcolor=black@0.45:shadowx=1:shadowy=2`;
+  return `,${shadow},${rim},${panel},drawtext=fontfile='${fontPath}':textfile='${textPath}':fontcolor=white:expansion=none:fontsize=34:line_spacing=16:text_align=center:x=(w-text_w)/2:y=(h-text_h)/2+400:shadowcolor=black@0.45:shadowx=1:shadowy=2`;
 }
 
 /**
@@ -947,11 +947,12 @@ const server = http.createServer(async (req, res) => {
 
       // Call Playwright automation to post
       const captionText = customCaption !== undefined ? customCaption : post.title;
-      await postToInstagram({
+      const igPostResult = await postToInstagram({
         imagePaths: uploadPaths,
         caption: captionText,
         headless: false,
-        shareToFacebook: doShareFB
+        shareToFacebook: doShareFB,
+        shareToThreads: !isFbOnly
       });
 
       const successMsg = doShareFB 
@@ -959,7 +960,7 @@ const server = http.createServer(async (req, res) => {
         : 'Đã đăng bài thành công lên Instagram!';
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: successMsg }));
+      res.end(JSON.stringify({ success: true, message: igPostResult.threadsWarning ? `${successMsg} ${igPostResult.threadsWarning}` : successMsg, threadsCrosspostEnabled: igPostResult.threadsCrosspostEnabled }));
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, error: err.message }));
@@ -1213,7 +1214,8 @@ const server = http.createServer(async (req, res) => {
           imagePaths: uploadPaths,
           caption: finalCaption,
           headless: false,
-          shareToFacebook: Boolean(autoPostFB)
+          shareToFacebook: Boolean(autoPostFB),
+          shareToThreads: Boolean(autoPostIG)
         });
       }
 
@@ -1263,6 +1265,8 @@ const server = http.createServer(async (req, res) => {
         count: post.isVideo ? 1 : post.images.length,
         igPosted: Boolean(autoPostIG && igResult?.success),
         fbPosted: Boolean(autoPostFB && igResult?.success),
+        threadsCrosspostEnabled: Boolean(igResult?.threadsCrosspostEnabled),
+        threadsWarning: igResult?.threadsWarning || null,
         igMessage: igResult?.message || null,
         tiktokPosted: Boolean(autoPostTikTok && tiktokResult?.success),
         tiktokMessage: tiktokResult?.message || null

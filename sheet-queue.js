@@ -36,7 +36,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       state.error = 'Lần chạy trước bị ngắt; cần kiểm tra trước khi tiếp tục.';
     }
   }
-  let timer = null, busy = false, started = false, nextRunAt = null, skipWaitOnce = false;
+  let timer = null, busy = false, started = false, nextRunAt = null;
   const save = () => {
     fs.writeFileSync(`${statePath}.tmp`, JSON.stringify(state, null, 2), 'utf8');
     fs.renameSync(`${statePath}.tmp`, statePath);
@@ -55,8 +55,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
   const plan = () => {
     if (!started || !state.enabled) return;
     try {
-      const delay = skipWaitOnce ? 0 : readSettings(settingsPath).intervalSeconds * 1000;
-      skipWaitOnce = false;
+      const delay = readSettings(settingsPath).intervalSeconds * 1000;
       nextRunAt = new Date(Date.now() + delay).toISOString();
       timer = schedule(() => { timer = null; nextRunAt = null; void tick().finally(plan); }, delay);
       timer?.unref?.();
@@ -80,10 +79,8 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       let raw = String(cells[row - 1] || '').trim();
       const previous = state.items[String(row)];
       if (!raw && ['awaiting_clear', 'failed_awaiting_clear'].includes(previous?.status)) {
-        if (previous.status === 'failed_awaiting_clear') skipWaitOnce = true;
         previous.status = previous.status === 'failed_awaiting_clear' ? 'failed' : 'done';
         previous.updatedAt = state.lastCheck;
-        if (cells.every(cell => !String(cell || '').trim())) skipWaitOnce = true;
         state.cursor++; state.blankCount = 0; save(); return;
       }
       while (!raw) {
@@ -112,11 +109,12 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         state.error = entry.error;
         save();
       } else if (url && !['awaiting_clear', 'failed_awaiting_clear'].includes(entry.status)) {
-        entry.status = 'running'; entry.updatedAt = new Date().toISOString(); save();
+        entry.status = 'running'; entry.warning = null; entry.updatedAt = new Date().toISOString(); save();
         try {
           const result = await runPipeline(url, { ...state.options });
           if (!result.success) throw new Error(result.error || 'Quy trình thất bại');
           entry.status = 'awaiting_clear'; entry.error = null;
+          entry.warning = result.threadsWarning || null;
           entry.updatedAt = new Date().toISOString(); save();
         } catch (error) {
           entry.status = 'failed_awaiting_clear'; entry.error = error.message;
@@ -137,14 +135,10 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       }
       if (!latest) {
         entry.status = finalStatus; entry.updatedAt = new Date().toISOString();
-        if (finalStatus === 'failed') skipWaitOnce = true;
-        if (latestCells.every(cell => !String(cell || '').trim())) skipWaitOnce = true;
         state.cursor++; state.blankCount = 0; save(); return;
       }
       await sheet.clearCell(settings, row);
       entry.status = finalStatus; entry.updatedAt = new Date().toISOString();
-      if (finalStatus === 'failed') skipWaitOnce = true;
-      if (latestCells.every((cell, index) => index === row - 1 || !String(cell || '').trim())) skipWaitOnce = true;
       state.cursor++; state.blankCount = 0; save();
     } catch (error) { state.error = error.message; save(); }
     finally { busy = false; }
@@ -153,13 +147,14 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
   return {
     snapshot, tick,
     start() { if (!started) { started = true; plan(); } },
-    stop() { started = false; if (timer) clearTimeout(timer); timer = null; nextRunAt = null; skipWaitOnce = false; },
+    stop() { started = false; if (timer) clearTimeout(timer); timer = null; nextRunAt = null; },
     configure({ enabled, options, runNow = false }) {
+      const wasEnabled = state.enabled;
+      const startNow = enabled === true && !wasEnabled && runNow && !busy;
       if (typeof enabled === 'boolean') {
         state.enabled = enabled;
-        if (enabled && ['failed', 'interrupted'].includes(state.items[String(state.cursor)]?.status)) state.items[String(state.cursor)].status = 'pending';
-        if (enabled && runNow && !busy) { state.cursor = 1; skipWaitOnce = false; }
-        if (!enabled) skipWaitOnce = false;
+        if (enabled && !wasEnabled && ['failed', 'interrupted'].includes(state.items[String(state.cursor)]?.status)) state.items[String(state.cursor)].status = 'pending';
+        if (startNow) state.cursor = 1;
         if (enabled) { state.error = null; state.blankCount = 0; }
       }
       if (options) for (const key of Object.keys(DEFAULT_OPTIONS)) {
@@ -168,7 +163,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         } else if (typeof options[key] === 'boolean') state.options[key] = options[key];
       }
       save();
-      if (started && state.enabled && runNow && !busy) {
+      if (started && startNow) {
         if (timer) clearTimeout(timer);
         timer = null; nextRunAt = null;
         void tick().finally(plan);

@@ -135,7 +135,7 @@ async function dismissPopups(page) {
 /**
  * Automatically post images or Reel video to Instagram
  */
-export async function postToInstagram({ imagePaths, caption, headless = false, shareToFacebook = false }) {
+export async function postToInstagram({ imagePaths, caption, headless = false, shareToFacebook = false, shareToThreads = false }) {
   if (!imagePaths || imagePaths.length === 0) {
     throw new Error('Danh sách file tải lên trống');
   }
@@ -369,21 +369,39 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
         console.log('[Instagram] Không tìm thấy công tắc chia sẻ Facebook trong giao diện Instagram.');
       }
 
-      // Threads: Luôn tắt để tránh đăng rác
-      const threadsRow = dialog.locator('div').filter({ hasText: /Threads/i }).filter({ has: dialog.locator('input[role="switch"]') }).last();
-      const threadsSwitch = threadsRow.locator('input[role="switch"]').last();
-      if ((await threadsSwitch.count()) > 0) {
+    } catch (e) {
+      console.log('[Instagram] Bỏ qua bước cấu hình chia sẻ Facebook:', e.message);
+    }
+
+    let threadsCrosspostEnabled = false;
+    let threadsWarning = null;
+    try {
+      const threadsRow = dialog.locator('div').filter({ hasText: /Threads/i }).filter({ has: dialog.locator('[role="switch"]') }).last();
+      const threadsSwitch = threadsRow.locator('[role="switch"]').last();
+      if ((await threadsSwitch.count()) > 0 && (await threadsRow.locator('[role="switch"]').count()) === 1) {
         const isThreadsChecked = (await threadsSwitch.evaluate(el => el.checked).catch(() => false)) || 
                                 ((await threadsSwitch.getAttribute('aria-checked').catch(() => 'false')) === 'true');
-        if (isThreadsChecked) {
+        if (shareToThreads && !isThreadsChecked) {
+          console.log('[Instagram] Bật chia sẻ sang Threads...');
+          await threadsSwitch.click();
+          await page.waitForTimeout(800);
+        } else if (!shareToThreads && isThreadsChecked) {
           console.log('[Instagram] Tắt chia sẻ sang Threads...');
           await threadsSwitch.click();
           await page.waitForTimeout(800);
         }
+        threadsCrosspostEnabled = shareToThreads && (
+          (await threadsSwitch.evaluate(el => el.checked).catch(() => false)) ||
+          ((await threadsSwitch.getAttribute('aria-checked').catch(() => 'false')) === 'true')
+        );
+        if (shareToThreads && !threadsCrosspostEnabled) threadsWarning = 'Không bật được chia sẻ Threads trong Instagram.';
+      } else if (shareToThreads) {
+        threadsWarning = 'Instagram không hiển thị công tắc chia sẻ Threads cho bài này.';
       }
     } catch (e) {
-      console.log('[Instagram] Bỏ qua bước cấu hình chia sẻ Facebook/Threads:', e.message);
+      threadsWarning = `Không cấu hình được Threads: ${e.message}`;
     }
+    if (threadsWarning) console.warn(`[Instagram] ${threadsWarning}`);
 
     // 7. Click "Share" (Chia sẻ)
     console.log('[Instagram] Đang bấm Đăng (Chia sẻ)...');
@@ -451,7 +469,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     await context.storageState({ path: AUTH_FILE });
     await page.waitForTimeout(3000);
     await browser.close();
-    return { success: true, message: 'Đăng bài lên Instagram thành công!' };
+    return { success: true, message: 'Đăng bài lên Instagram thành công!', threadsCrosspostEnabled, threadsWarning };
   } catch (err) {
     console.error('[Instagram] Lỗi đăng bài:', err.message);
     try {

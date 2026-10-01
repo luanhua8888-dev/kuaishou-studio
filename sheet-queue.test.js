@@ -68,6 +68,7 @@ test('Start resets an old cursor and skips cleared rows before the next link', a
   await queue.tick();
   assert.equal(queue.snapshot().cursor, 5);
   cells[0] = 'https://v.kuaishou.com/new-first';
+  queue.configure({ enabled: false });
   queue.start();
   queue.configure({ enabled: true, runNow: true });
   await new Promise(resolve => setImmediate(resolve));
@@ -105,7 +106,7 @@ test('clears an invalid link and continues', async t => {
   assert.deepEqual(cleared, [1, 2]);
 });
 
-test('schedules the next row immediately after a failed link', async t => {
+test('waits the configured interval after a failed link', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const settingsPath = path.join(dir, '.setting');
@@ -125,7 +126,7 @@ test('schedules the next row immediately after a failed link', async t => {
   queue.configure({ enabled: true, runNow: true });
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls, ['https://v.kuaishou.com/fail']);
-  assert.deepEqual(scheduled.map(item => item.delay), [0]);
+  assert.deepEqual(scheduled.map(item => item.delay), [3600000]);
   assert.equal(queue.snapshot().enabled, true);
   assert.equal(cells[0], '');
   queue.stop();
@@ -210,4 +211,29 @@ test('Start runs the next link immediately, then schedules the following run', a
   assert.ok(Date.parse(nextRunAt) > Date.now() + 3590000);
   queue.stop();
   assert.equal(queue.snapshot().nextRunAt, null);
+});
+
+test('repeated Start requests keep the existing interval and do not post again', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const settingsPath = path.join(dir, '.setting');
+  fs.writeFileSync(settingsPath, JSON.stringify({ intervalSeconds: 1800 }));
+  const cells = ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second'];
+  const calls = [], scheduled = [];
+  const queue = createSheetQueue({
+    statePath: path.join(dir, 'state.json'), settingsPath,
+    sheet: { readColumn: async () => cells, clearCell: async (_, row) => { cells[row - 1] = ''; } },
+    runPipeline: async url => { calls.push(url); return { success: true }; },
+    schedule: (callback, delay) => { scheduled.push({ callback, delay }); return { unref() {} }; }
+  });
+  queue.start();
+  queue.configure({ enabled: true, runNow: true });
+  await new Promise(resolve => setImmediate(resolve));
+  const nextRunAt = queue.snapshot().nextRunAt;
+  queue.configure({ enabled: true, runNow: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['https://v.kuaishou.com/first']);
+  assert.equal(queue.snapshot().nextRunAt, nextRunAt);
+  assert.deepEqual(scheduled.map(item => item.delay), [1800000]);
+  queue.stop();
 });
