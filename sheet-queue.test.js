@@ -17,7 +17,7 @@ function fixture(t, cells, pipeline = async () => ({ success: true })) {
       readColumn: async () => cells,
       clearCell: async (_, row) => { cleared.push(row); cells[row - 1] = ''; }
     },
-    runPipeline: async (url) => { calls.push(url); return pipeline(url); }
+    runPipeline: async (url, options) => { calls.push(url); return pipeline(url, options); }
   });
   queue.configure({ enabled: true });
   return { queue, cleared, calls, settingsPath };
@@ -26,6 +26,30 @@ function fixture(t, cells, pipeline = async () => ({ success: true })) {
 test('accepts only Kuaishou URLs', () => {
   assert.equal(rowLink('Share https://v.kuaishou.com/abc'), 'https://v.kuaishou.com/abc');
   assert.equal(rowLink('https://docs.google.com/example'), null);
+});
+
+test('keeps a link after partial failure and retries only the missing platform', async t => {
+  const cells = ['https://v.kuaishou.com/all-platforms'];
+  const received = [];
+  const { queue, cleared } = fixture(t, cells, async (_, options) => {
+    received.push(options);
+    if (received.length === 1) return { success: false, partialFailure: true, igPosted: true, fbPosted: true, tiktokPosted: true, threadsPosted: false, error: 'Threads failed' };
+    return { success: true, threadsPosted: true };
+  });
+  await queue.tick();
+  assert.equal(received[0].autoPostIG && received[0].autoPostFB && received[0].autoPostTikTok && received[0].autoPostThreads, true);
+  assert.equal(queue.snapshot().enabled, false);
+  assert.equal(queue.snapshot().items[0].status, 'partial');
+  assert.equal(cells[0], 'https://v.kuaishou.com/all-platforms');
+  assert.deepEqual(cleared, []);
+  queue.configure({ enabled: true });
+  await queue.tick();
+  assert.equal(received[1].autoPostIG, false);
+  assert.equal(received[1].autoPostFB, false);
+  assert.equal(received[1].autoPostTikTok, false);
+  assert.equal(received[1].autoPostThreads, true);
+  assert.equal(queue.snapshot().items[0].published.threadsPosted, true);
+  assert.deepEqual(cleared, [1]);
 });
 
 test('runs one link per tick, clears it, and skips a blank row', async t => {

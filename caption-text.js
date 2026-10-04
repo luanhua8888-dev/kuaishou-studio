@@ -7,6 +7,17 @@ export function normalizeCaptionText(value) {
     .replace(/[^\S\n]+/g, ' ').trim();
 }
 
+// Captions are published without account mentions, including mentions in custom text.
+export function removeCaptionMentions(value) {
+  return String(value ?? '')
+    .replace(/\b[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}\b/gu, '')
+    .replace(/@[\p{L}\p{N}._-]+/gu, '')
+    .replace(/@/g, '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim();
+}
+
 export function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     // Decode after collecting bytes: a Vietnamese character can span chunks.

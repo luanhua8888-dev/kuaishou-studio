@@ -5,7 +5,11 @@
   "scripts": {
     "start": "node download_kuaishou.js",
     "ui": "node server.js",
-    "ig:login": "node ig_poster.js login"
+    "ui:threads": "node server.js --port=3001 --threads-only",
+    "ui:all": "node server.js --port=3002",
+    "test:threads-api": "node verify-threads-api.mjs",
+    "ig:login": "node ig_poster.js login",
+    "threads:login": "node threads_poster.js login"
   },
   "dependencies": {
     "playwright": "^1.63.0"

@@ -8,781 +8,193 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --primary: #ff4757;
-      --primary-hover: #ee3848;
-      --primary-light: #fff0f2;
-      --ig-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --card-border: #334155;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent: #10b981;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    }
-
-    body {
-      background-color: var(--bg);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 30px 16px;
-    }
-
-    .container {
-      width: 100%;
-      max-width: 860px;
-    }
-
-    header {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 24px;
-      position: relative;
-    }
-
-    .header-top {
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .logo-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 71, 87, 0.15);
-      color: var(--primary);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      border: 1px solid rgba(255, 71, 87, 0.25);
-    }
-
-    .ig-status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: #1e293b;
-      border: 1px solid var(--card-border);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .ig-status-pill:hover {
-      border-color: #64748b;
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .dot-green { background: #10b981; box-shadow: 0 0 8px #10b981; }
-    .dot-gray { background: #94a3b8; }
-
-    h1 {
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      margin-bottom: 8px;
-      text-align: center;
-      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    p.subtitle {
-      color: var(--text-muted);
-      font-size: 15px;
-      text-align: center;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    @media (min-width: 640px) {
-      .input-group {
-        flex-direction: row;
-      }
-    }
-
-    .url-input {
-      flex: 1;
-      background: #0f172a;
-      border: 1.5px solid var(--card-border);
-      border-radius: 14px;
-      padding: 14px 18px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-
-    .url-input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.15);
-    }
-
-    .url-input::placeholder {
-      color: #64748b;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 13px 22px;
-      border-radius: 14px;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-    }
-
-    .btn-primary {
-      background: var(--primary);
-      color: #fff;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: var(--primary-hover);
-      transform: translateY(-1px);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-ig {
-      background: var(--ig-gradient);
-      color: #fff;
-    }
-
-    .btn-ig:hover:not(:disabled) {
-      filter: brightness(1.1);
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: #334155;
-      color: #f8fafc;
-    }
-
-    .btn-secondary:hover {
-      background: #475569;
-    }
-
-    .status-box {
-      margin-top: 14px;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 14px;
-      display: none;
-    }
-
-    .status-loading {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      position: relative;
-      overflow: hidden;
-      background: rgba(59, 130, 246, 0.1);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.2);
-    }
-
-    .status-loading::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      bottom: 0;
-      width: 36%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #7dd3fc, transparent);
-      animation: statusSweep 2.2s ease-in-out infinite;
-    }
-
-    @keyframes statusSweep {
-      from { transform: translateX(-100%); }
-      to { transform: translateX(290%); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .status-loading::after, .spinner { animation: none; }
-    }
-
-    .status-error {
-      background: rgba(239, 68, 68, 0.1);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.2);
-    }
-
-    .status-success {
-      background: rgba(16, 185, 129, 0.1);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border: 2.5px solid currentColor;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    /* Modern Toggle Switches */
-    .switches-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 12px;
-      margin-top: 10px;
-    }
-
-    .switch-card {
-      background: #0f172a;
-      border: 1.5px solid var(--card-border);
-      border-radius: 14px;
-      padding: 12px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      cursor: pointer;
-      user-select: none;
-      transition: all 0.25s ease;
-    }
-
-    .switch-card:hover {
-      border-color: #475569;
-      transform: translateY(-1px);
-    }
-
-    .switch-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .platform-icon {
-      font-size: 20px;
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .switch-text {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .platform-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .platform-desc {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .switch-card.active-ig {
-      border-color: #ec4899;
-      background: linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(240, 148, 51, 0.08));
-      box-shadow: 0 4px 15px -3px rgba(236, 72, 153, 0.25);
-    }
-
-    .switch-card.active-tiktok {
-      border-color: #06b6d4;
-      background: rgba(6, 182, 212, 0.1);
-      box-shadow: 0 4px 15px -3px rgba(6, 182, 212, 0.25);
-    }
-
-    .switch-card.active-fb {
-      border-color: #1877f2;
-      background: rgba(24, 119, 242, 0.12);
-      box-shadow: 0 4px 15px -3px rgba(24, 119, 242, 0.25);
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 46px;
-      height: 26px;
-      display: inline-block;
-      flex-shrink: 0;
-    }
-
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #334155;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      border-radius: 26px;
-    }
-
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 20px;
-      width: 20px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      border-radius: 50%;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    #chkAutoPostIG:checked + .slider {
-      background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-    }
-
-    #chkAutoPostTikTok:checked + .slider {
-      background: linear-gradient(135deg, #00f2fe 0%, #06b6d4 100%);
-    }
-
-    #chkAutoPostFB:checked + .slider {
-      background: #1877f2;
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(20px);
-    }
-
-    /* Result Section */
-    .result-section {
-      display: none;
-      animation: fadeIn 0.3s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .post-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding-bottom: 18px;
-      border-bottom: 1px solid var(--card-border);
-      margin-bottom: 18px;
-    }
-
-    .author-avatar {
-      width: 54px;
-      height: 54px;
-      border-radius: 50%;
-      border: 2px solid var(--primary);
-      object-fit: cover;
-      background: #334155;
-    }
-
-    .post-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .author-name {
-      font-size: 17px;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .post-title {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-top: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-
-    .badge-count {
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--accent);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .actions-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    .gallery {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 14px;
-      margin-top: 16px;
-    }
-
-    .gallery-item {
-      position: relative;
-      border-radius: 12px;
-      overflow: hidden;
-      aspect-ratio: 3/4;
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-
-    .gallery-item:hover {
-      transform: scale(1.02);
-      border-color: var(--primary);
-    }
-
-    .gallery-item img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .gallery-overlay {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 10px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .img-idx {
-      font-size: 12px;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .img-dl-btn {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(4px);
-      border: none;
-      color: #fff;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
-      text-decoration: none;
-    }
-
-    .img-dl-btn:hover {
-      background: var(--primary);
-    }
-
-    audio {
-      width: 100%;
-      margin-top: 14px;
-      border-radius: 8px;
-    }
-
-    .caption-box {
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 16px;
-      margin-bottom: 20px;
-    }
-
-    .caption-textarea {
-      width: 100%;
-      height: 110px;
-      background: #1e293b;
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 12px;
-      color: #f8fafc;
-      font-size: 13.5px;
-      line-height: 1.5;
-      resize: vertical;
-      outline: none;
-      margin-top: 8px;
-    }
-
-    .caption-textarea:focus {
-      border-color: #ec4899;
-    }
-
-    /* A calmer workspace with clear steps and readable Vietnamese typography. */
-    :root {
-      --bg: #101617;
-      --card-bg: #1b2425;
-      --card-border: #344143;
-      --primary: #a9beb4;
-      --primary-hover: #bdd0c5;
-      --text-muted: #a5b2ae;
-    }
-    body { background: radial-gradient(ellipse at 15% 0, #1d2928 0, transparent 52%), var(--bg); padding: 30px clamp(14px, 2vw, 38px) 64px; }
-    * { font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, 'Segoe UI Emoji', sans-serif; }
-    .container { width: 100%; max-width: none; }
-    header { align-items: flex-start; margin-bottom: 28px; }
-    .header-top { align-items: flex-start; gap: 20px; margin-bottom: 36px; }
-    .header-top > div:last-child { justify-content: flex-end; }
-    .logo-badge { border: 1px solid #52605a; border-radius: 8px; padding: 9px 12px; background: #27312e; color: #ced9d2; white-space: nowrap; }
-    .ig-status-pill { font-size: 11px; padding: 7px 10px; background: #1b2425; }
-    .dot-green { box-shadow: none; }
-    h1 { font-size: clamp(28px, 4vw, 42px); text-align: left; letter-spacing: -1.4px; line-height: 1.2; margin-bottom: 12px; color: #f5f7fb; background: none; -webkit-text-fill-color: initial; }
-    p.subtitle { text-align: left; line-height: 1.7; font-size: 14px; }
-    .card { padding: clamp(20px, 2vw, 34px); border-radius: 18px; box-shadow: 0 12px 36px #0002; }
-    .section-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-    .step-number { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #56655e; border-radius: 9px; color: #bdd0c5; font-size: 12px; font-weight: 700; }
-    .section-heading h2 { font-size: 16px; font-weight: 700; }
-    .url-input { min-width: 0; background: #141c1d; border-width: 1px; border-radius: 11px; }
-    .url-input:focus { box-shadow: 0 0 0 3px #a9beb427; }
-    .btn { border-radius: 10px; }
-    .btn-primary { color: #17211d; }
-    .btn-secondary { background: #34413e; color: #edf2ee; }
-    .btn-secondary:hover { background: #455550; }
-    .btn-ig { background: #63756d; }
-    .switches-container { gap: 14px; }
-    .switch-card { min-height: 88px; padding: 18px; border-width: 1px; }
-    .platform-icon { font-size: 12px; font-weight: 800; letter-spacing: -.5px; flex-shrink: 0; }
-    .icon-ig, .icon-tt, .icon-fb { color: #e9f0eb; background: #485b53; box-shadow: none; }
-    .icon-tt { background: #435658; }
-    .icon-fb { background: #4c5c6a; }
-    .switch-card { background: #172021; }
-    .switch-card:hover { background-color: #243031; }
-    .switch-card.active-ig, .switch-card.active-tiktok, .switch-card.active-fb { box-shadow: none; }
-    .switch-card.active-ig, .switch-card.active-tiktok, .switch-card.active-fb { border-color: #637a6f; background: #26332f; }
-    #chkAutoPostIG:checked + .slider, #chkAutoPostTikTok:checked + .slider, #chkAutoPostFB:checked + .slider { background: #829b8e; }
-    #chkAsReel, #chkAddMoodText { accent-color: #829b8e !important; }
-    label:has(#chkAsReel), .overlay-settings > div:first-child label { color: #c8d8ce !important; }
-    .platform-desc { line-height: 1.5; margin-top: 5px; }
-    .caption-box { padding: 20px; background: #182122; }
-    .caption-box > div > span { color: #bfd0c5 !important; }
-    .caption-textarea { font-size: 12px; padding: 16px 18px; min-height: 130px; line-height: 1.8; background: #202b2c; }
-    .overlay-settings { background: #172021; border: 1px solid var(--card-border); border-radius: 14px; padding: 20px; margin-top: 6px; }
-    #btnManualPostTikTok, #btnManualPostFB { background: #4c615a !important; color: #fff !important; }
-    .status-loading { background: #a9beb415; color: #bdd0c5; border-color: #a9beb42b; }
-    .status-loading::after { background: linear-gradient(90deg, transparent, #a9beb4, transparent); }
-    .overlay-help { color: var(--text-muted); font-size: 12px; line-height: 1.7; margin: 8px 0 14px 24px; }
-    .field-label { display: block; color: #a1aec1; font-size: 12px; margin-bottom: 8px; }
-    .actions-bar { gap: 10px; }
-    .actions-bar .btn { font-size: 12px; padding: 12px 16px; }
-    .post-title { overflow-wrap: anywhere; }
-    :focus-visible { outline: 2px solid #bdd0c5; outline-offset: 4px; }
-    .toggle-switch input:focus-visible + .slider { outline: 2px solid #bdd0c5; outline-offset: 4px; }
-    @media (max-width: 640px) {
-      body { padding: 20px 14px 40px; }
-      .header-top { flex-direction: column; margin-bottom: 26px; gap: 14px; }
-      .header-top > div:last-child { justify-content: flex-start; }
-      .card { padding: 18px; }
-      .switches-container { grid-template-columns: 1fr; }
-      .switch-card { min-height: 72px; }
-      .overlay-settings, .caption-box { padding: 15px; }
-      .overlay-help { margin-left: 0; }
-      .actions-bar .btn { flex: 1 1 45%; white-space: normal; }
-    }
+    :root { --bg:#f6f7f8; --card-bg:#fff; --card-border:#e5e7eb; --text-main:#20252b; --text-muted:#707780; --primary:#252b32; --primary-hover:#10151a; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text-main); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-size:14px; line-height:1.6; padding:28px 32px; }
+    button,input,select,textarea { font:inherit; }
+    button,a,input,select,summary { -webkit-tap-highlight-color:transparent; }
+    :focus-visible { outline:3px solid #91b5df; outline-offset:4px; }
+    .container { width:100%; margin:auto; }
+    header { margin-bottom:24px; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr); gap:20px; align-items:start; }
+    .controls-column { min-width:0; }
+    .controls-column .card { padding:20px; margin-bottom:14px; }
+    .controls-column .queue-footer { gap:14px; }
+    .controls-column .queue-actions .btn { flex:1; }
+    .controls-column .switches-container { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .controls-column .section-heading .muted { display:none; }
+    .controls-column .settings-grid { grid-template-columns:1fr; gap:16px; }
+    .card.sheet-panel { min-width:0; padding:0; overflow:hidden; margin-bottom:0; }
+    .sheet-panel-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid var(--card-border); }
+    .sheet-panel-header .helper { margin-top:3px; }
+    .sheet-tools { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+    .sheet-tools a { font-size:12px; }
+    .sheet-list { max-height:480px; overflow:auto; }
+    .sheet-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }
+    .sheet-table th { text-align:left; background:var(--bg); font-weight:600; position:sticky; top:0; }
+    .sheet-table th,.sheet-table td { padding:10px 16px; border-bottom:1px solid var(--card-border); }
+    .sheet-table th:first-child { width:64px; }
+    .sheet-table td:first-child { color:var(--text-muted); font-variant-numeric:tabular-nums; }
+    .sheet-table td:last-child { overflow-wrap:anywhere; }
+    .sheet-list-message { padding:24px 16px; color:var(--text-muted); font-size:12px; }
+    .sheet-panel-note { padding:10px 22px; border-top:1px solid var(--card-border); font-size:11px; color:var(--text-muted); }
+    @media(max-width:1200px) { .controls-column .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); } .controls-column .queue-footer { flex-direction:column; align-items:stretch; } }
+    @media(max-width:1000px) { .workspace { grid-template-columns:1fr; } .controls-column { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; } .controls-column .card { margin-bottom:0; } .controls-column .advanced { grid-column:1 / -1; } }
+    .header-top,.section-heading,.sheet-top,.queue-footer,.platform-top,.post-header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    .logo-badge { font-size:11px; font-weight:700; letter-spacing:2px; color:var(--text-muted); }
+    .header-note { font-size:12px; color:var(--text-muted); }
+    h1 { font-size:30px; letter-spacing:-1px; line-height:1.25; margin:20px 0 8px; font-weight:700; }
+    .subtitle { margin:0; color:var(--text-muted); }
+    h2 { font-size:15px; font-weight:700; margin:0; }
+    p { margin:0; }
+    .card { background:var(--card-bg); border:1px solid var(--card-border); border-radius:16px; padding:28px; margin-bottom:18px; }
+    .section-heading { margin-bottom:20px; }
+    .section-label { display:flex; align-items:center; gap:10px; }
+    .step-number { font-size:11px; color:var(--text-muted); background:var(--bg); border:1px solid var(--card-border); border-radius:6px; padding:2px 7px; }
+    .muted,.helper,.field-label { color:var(--text-muted); font-size:12px; }
+    .sheet-source { background:var(--bg); border:1px solid var(--card-border); border-radius:10px; padding:18px; }
+    .source-name { font-weight:600; }
+    .source-icon { display:inline-grid; place-items:center; width:32px; height:32px; border-radius:7px; background:#e7eee9; color:#52705c; font-size:12px; margin-right:10px; }
+    a { color:var(--text-main); text-underline-offset:4px; }
+    .sheet-top a { font-size:12px; white-space:nowrap; }
+    .sheet-source .helper { margin-top:10px; }
+    .queue-footer { align-items:flex-end; margin-top:20px; }
+    #sheetStatus { font-size:13px; overflow-wrap:anywhere; }
+    #sheetCountdown { font-size:12px; color:var(--text-muted); margin-top:4px; font-variant-numeric:tabular-nums; }
+    .queue-actions,.actions-bar { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { border:1px solid var(--card-border); border-radius:8px; background:white; color:var(--text-main); padding:10px 16px; cursor:pointer; font-weight:600; font-size:12px; display:inline-flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; white-space:nowrap; transition:background .15s; }
+    [hidden] { display:none !important; }
+    .btn:hover { background:#f0f2f4; }
+    .btn-primary { background:var(--primary); color:white; border-color:var(--primary); }
+    .btn-primary:hover { background:var(--primary-hover); }
+    .btn:disabled { opacity:.5; cursor:wait; }
+    .direct-link { border-top:1px solid var(--card-border); margin-top:22px; padding-top:16px; }
+    summary { cursor:pointer; font-size:13px; font-weight:500; }
+    details[open] > summary { margin-bottom:16px; }
+    .url-input,.caption-textarea,select { border:1px solid var(--card-border); border-radius:8px; padding:11px 13px; background:#fff; color:var(--text-main); width:100%; }
+    .url-input::placeholder { color:#9298a0; }
+    .direct-link .helper { margin-top:8px; }
+    .switches-container { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .switch-card { border:1px solid var(--card-border); border-radius:10px; padding:16px 14px; min-width:0; }
+    .switch-card:is(.active-ig,.active-fb,.active-tiktok) { border-color:#bfc9c3; background:#fafcfb; }
+    .platform-name { font-size:13px; font-weight:600; }
+    .platform-desc { font-size:11px; color:var(--text-muted); margin-top:5px; min-height:36px; }
+    .ig-status-pill { padding:0; border:0; background:transparent; text-align:left; color:var(--text-muted); font-size:11px; cursor:pointer; display:flex; align-items:center; gap:6px; line-height:1.5; margin-top:16px; }
+    .ig-status-pill:hover { color:var(--text-main); }
+    .dot { flex:none; width:6px; height:6px; border-radius:50%; background:#a7adb5; }
+    .dot-green { background:#42835d; }
+    .toggle-switch { position:relative; width:30px; height:18px; display:inline-block; flex:none; cursor:pointer; }
+    .toggle-switch input { opacity:0; width:30px; height:18px; margin:0; position:absolute; z-index:1; cursor:pointer; }
+    .slider { position:absolute; inset:0; border-radius:20px; background:#d8dde1; transition:background .2s; }
+    .slider:before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; border-radius:50%; background:white; transition:transform .2s; }
+    input:checked + .slider { background:#405c4b; }
+    input:checked + .slider:before { transform:translateX(12px); }
+    input:focus-visible + .slider { outline:3px solid #91b5df; outline-offset:4px; }
+    .platform-helper { margin-top:14px; }
+    .advanced { padding:18px 28px; }
+    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding-top:4px; }
+    .setting-label { display:block; font-size:12px; margin-bottom:7px; }
+    .check-field { display:flex; align-items:flex-start; gap:9px; font-size:13px; cursor:pointer; }
+    input[type=checkbox] { accent-color:#405c4b; }
+    .overlay-settings { border-top:1px solid var(--card-border); margin-top:20px; padding-top:20px; }
+    .overlay-help { margin:6px 0 12px; font-size:12px; color:var(--text-muted); }
+    .field-label { display:block; margin-bottom:6px; }
+    .help-note { margin-top:20px; font-size:12px; color:var(--text-muted); }
+    .status-box { display:none; align-items:center; gap:10px; border:1px solid var(--card-border); background:white; border-radius:10px; padding:16px 20px; margin:16px 0; font-size:13px; overflow-wrap:anywhere; }
+    .status-error { color:#a33838; background:#fff7f7; border-color:#efd8d8; }
+    .status-success { color:#356948; background:#f4faf6; border-color:#d5e5da; }
+    .spinner { width:16px; height:16px; border:2px solid #dbe0e4; border-top-color:#596774; border-radius:50%; animation:spin 1s linear infinite; flex:none; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .result-section { display:none; }
+    .post-header { justify-content:flex-start; margin-bottom:20px; }
+    .author-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; }
+    .post-info { flex:1; min-width:0; }
+    .author-name { font-weight:600; }
+    .post-title { font-size:12px; color:var(--text-muted); }
+    .badge-count { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+    .caption-box { background:var(--bg); padding:16px; border:1px solid var(--card-border); border-radius:10px; margin-bottom:16px; }
+    .caption-textarea { min-height:120px; resize:vertical; margin-top:12px; font-size:13px; line-height:1.6; }
+    .actions-bar { margin-bottom:20px; }
+    .media-box { border:1px solid var(--card-border); border-radius:10px; padding:16px; margin-bottom:20px; }
+    .media-title { font-size:13px; font-weight:600; }
+    .gallery { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .gallery-item { position:relative; border-radius:10px; overflow:hidden; background:var(--bg); }
+    .gallery-item img { width:100%; display:block; }
+    .gallery-overlay { position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:space-between; padding:12px; background:linear-gradient(transparent,#0008); color:white; font-size:12px; }
+    .img-dl-btn { color:white; }
+    footer { text-align:center; color:#9298a0; font-size:11px; margin-top:24px; }
+    @media(max-width:700px) { body { padding:24px 16px; } .controls-column { display:block; } .controls-column .card { margin-bottom:14px; } .card { padding:20px; } .sheet-panel { padding:0; } .sheet-panel-header { align-items:flex-start; flex-direction:column; padding:16px; gap:10px; } .sheet-panel-note { padding:10px 16px; } .sheet-frame { height:520px; } .advanced { padding:16px 20px; } .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); } .settings-grid { grid-template-columns:1fr; gap:16px; } h1 { font-size:26px; } .header-note { display:none; } .gallery { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media(max-width:420px) { .queue-footer { align-items:stretch; flex-direction:column; } .queue-actions .btn { flex:1; } .sheet-top { align-items:flex-start; } .section-heading .muted { display:none; } .actions-bar .btn { flex:1 1 45%; white-space:normal; } }
+    @media(prefers-reduced-motion:reduce) { *,*:before { transition:none !important; } }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <div class="header-top">
-        <div class="logo-badge">K / KUAISHOU STUDIO</div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <div id="igStatusBtn" class="ig-status-pill" title="Bấm để đăng nhập hoặc kiểm tra Instagram">
-            <span id="igDot" class="dot dot-gray"></span>
-            <span id="igStatusText">Instagram: Đang kiểm tra...</span>
-          </div>
-          <div id="tiktokStatusBtn" class="ig-status-pill" title="Bấm để đăng nhập hoặc kiểm tra TikTok">
-            <span id="tiktokDot" class="dot dot-gray"></span>
-            <span id="tiktokStatusText">TikTok: Đang kiểm tra...</span>
-          </div>
-          <div id="fbStatusBtn" class="ig-status-pill" title="Facebook chia sẻ tự động qua tài khoản Instagram liên kết">
-            <span id="fbDot" class="dot dot-gray"></span>
-            <span id="fbStatusText">Facebook: Đang kiểm tra...</span>
-          </div>
-        </div>
-      </div>
-      <h1>Một đường link. Nhiều khoảnh khắc.</h1>
-      <p class="subtitle">Tải nội dung gốc, thêm câu chữ của bạn và chia sẻ lên Instagram, TikTok, Facebook.</p>
+      <div class="header-top"><div class="logo-badge">KUAISHOU STUDIO</div><span class="header-note">Một nơi quản lý · Bốn nền tảng</span></div>
+      <h1>Đăng nội dung, đơn giản hơn.</h1>
+      <p class="subtitle">Thêm link vào bảng. Chọn nơi đăng. Công cụ xử lý phần còn lại.</p>
     </header>
-
-    <div class="card">
-      <div class="section-heading"><span class="step-number">01</span><h2>Thêm nội dung Kuaishou</h2></div>
-      <div class="input-group">
-        <input 
-          type="text" 
-          id="urlInput" 
-          aria-label="Đường link Kuaishou"
-          class="url-input" 
-          placeholder="Dán link, hoặc để trống rồi bấm Bắt đầu để lấy từ Google Sheets"
-          autocomplete="off"
-        />
-        <button id="btnRun" class="btn btn-primary">
-          <span>Bắt đầu</span>
-        </button>
+    <main class="workspace">
+    <div class="controls-column">
+    <section class="card" aria-labelledby="sourceHeading">
+      <div class="section-heading"><div class="section-label"><span class="step-number">01</span><h2 id="sourceHeading">Nguồn nội dung</h2></div><span class="muted">Hàng đợi tự động</span></div>
+      <div class="sheet-source">
+        <div class="sheet-top"><div class="source-name"><span class="source-icon" aria-hidden="true">GS</span>Google Sheets</div><a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở bảng ↗</a></div>
+        <p class="helper">Cột A, mỗi dòng một link Kuaishou. Công cụ xử lý lần lượt theo lịch.</p>
       </div>
-
-      <div style="margin-top: 18px; padding: 16px; border: 1px solid var(--card-border); border-radius: 14px; background: rgba(15,23,42,.45);">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-          <div>
-            <strong style="color:#f8fafc;">Tự động lấy link từ Google Sheets</strong>
-            <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Dán link Kuaishou từ ô A1, mỗi dòng một link. Bấm Bắt đầu để quét từ A1; mỗi lượt xử lý một link rồi xóa ô, kể cả khi link lỗi. Hết link sẽ tự dừng.</div>
-          </div>
-        </div>
-        <a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style="display:inline-block; margin-top:10px; color:#93c5fd; font-size:13px;">Mở bảng Google Sheets</a>
-        <div id="sheetStatus" style="font-size:13px; color:var(--text-muted); margin-top:10px;" aria-live="polite"></div>
-        <div id="sheetCountdown" style="font-size:15px; font-weight:700; color:#93c5fd; margin-top:7px; font-variant-numeric:tabular-nums;" aria-live="off"></div>
+      <div class="queue-footer">
+        <div><div id="sheetStatus" aria-live="polite">Đang tải trạng thái…</div><div id="sheetCountdown" aria-live="off"></div></div>
+        <div class="queue-actions"><button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button><button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button></div>
       </div>
-
-      <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span style="font-size: 13px; font-weight: 700; color: #cbd5e1; display: flex; align-items: center; gap: 6px;">
-            02 / Chọn nền tảng tự động đăng
-          </span>
-          <span style="font-size: 12px; color: var(--text-muted);">Đăng xong sẽ tự dọn file tạm · tắt cả ba để lưu về máy</span>
+      <details class="direct-link"><summary>Đăng một link riêng</summary><input type="text" id="urlInput" class="url-input" aria-label="Đường link Kuaishou" placeholder="Dán link Kuaishou tại đây…" autocomplete="off"><p class="helper">Dán link rồi bấm “Đăng link này”. Để trống để dùng hàng đợi Google Sheets.</p></details>
+    </section>
+    <section class="card" aria-labelledby="platformHeading">
+      <div class="section-heading"><div class="section-label"><span class="step-number">02</span><h2 id="platformHeading">Nơi đăng</h2></div><span class="muted">Bật nền tảng bạn muốn dùng</span></div>
+      <div class="switches-container">
+        <div class="switch-card" id="swCardIG">
+          <div class="platform-top"><span class="platform-name">Instagram</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostIG" aria-label="Đăng lên Instagram" checked><span class="slider"></span></label></div>
+          <p class="platform-desc">Reels & bộ ảnh</p>
+          <button type="button" id="igStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Instagram"><span id="igDot" class="dot dot-gray"></span><span id="igStatusText">Đang kiểm tra…</span></button>
         </div>
-
-        <!-- 3 Toggle Switches -->
-        <div class="switches-container">
-          <!-- Công tắc Instagram -->
-          <div class="switch-card active-ig" id="swCardIG">
-            <div class="switch-info">
-              <span class="platform-icon icon-ig" aria-hidden="true">IG</span>
-              <div class="switch-text">
-                <span class="platform-name">Instagram</span>
-                <span class="platform-desc">Reel video / Bộ ảnh</span>
-              </div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="chkAutoPostIG" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <!-- Công tắc TikTok -->
-          <div class="switch-card active-tiktok" id="swCardTikTok">
-            <div class="switch-info">
-              <span class="platform-icon icon-tt" aria-hidden="true">TT</span>
-              <div class="switch-text">
-                <span class="platform-name">TikTok</span>
-                <span class="platform-desc">Video Shorts có nhạc</span>
-              </div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="chkAutoPostTikTok" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <!-- Công tắc Facebook -->
-          <div class="switch-card active-fb" id="swCardFB">
-            <div class="switch-info">
-              <span class="platform-icon icon-fb" aria-hidden="true">FB</span>
-              <div class="switch-text">
-                <span class="platform-name">Facebook</span>
-                <span class="platform-desc">Chia sẻ qua IG liên kết</span>
-              </div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="chkAutoPostFB" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
+        <div class="switch-card" id="swCardFB">
+          <div class="platform-top"><span class="platform-name">Facebook</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostFB" aria-label="Đăng lên Facebook" checked><span class="slider"></span></label></div>
+          <p class="platform-desc">Qua Instagram liên kết</p>
+          <button type="button" id="fbStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Facebook"><span id="fbDot" class="dot dot-gray"></span><span id="fbStatusText">Đang kiểm tra…</span></button>
         </div>
-
-        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 6px;">
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; color: #c084fc;">
-            <input type="checkbox" id="chkAsReel" checked style="width: 16px; height: 16px; accent-color: #a855f7; cursor: pointer;">
-            <span>Tự động tạo Video Reel / Shorts 9:16 (Chuyển cảnh hòa tan mượt mà + Ghép nhạc)</span>
-          </label>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 13px; font-weight: 600; color: #94a3b8;">Ngôn ngữ Caption:</span>
-            <select id="captionLangSelect" style="background: #1e293b; color: #f8fafc; border: 1px solid var(--card-border); padding: 5px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer;">
-              <option value="en" selected>Tiếng Anh (English)</option>
-              <option value="vi">Tiếng Việt</option>
-              <option value="both">Song ngữ (Anh + Việt)</option>
-              <option value="raw">Tiếng Trung gốc</option>
-            </select>
-          </div>
+        <div class="switch-card" id="swCardTikTok">
+          <div class="platform-top"><span class="platform-name">TikTok</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostTikTok" aria-label="Đăng lên TikTok" checked><span class="slider"></span></label></div>
+          <p class="platform-desc">Video có nhạc</p>
+          <button type="button" id="tiktokStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối TikTok"><span id="tiktokDot" class="dot dot-gray"></span><span id="tiktokStatusText">Đang kiểm tra…</span></button>
         </div>
-
-        <!-- Tùy chọn chữ tâm trạng trên Video TikTok -->
-        <div class="overlay-settings">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; cursor: pointer; color: #38bdf8;">
-              <input type="checkbox" id="chkAddMoodText" checked style="width: 16px; height: 16px; accent-color: #38bdf8; cursor: pointer;">
-              <span>03 / Chèn caption lên ảnh trong video TikTok</span>
-            </label>
-          </div>
-          <p class="overlay-help">Chữ trắng trên nền tối mờ, đặt gọn trong khung ảnh. Áp dụng khi ghép bộ ảnh thành video TikTok.</p>
-          <div id="moodTextContainer" style="margin-top: 8px;">
-            <label for="moodTextInput" class="field-label">Nội dung chèn lên ảnh · để trống để tạo tự động</label>
-            <input 
-              type="text" 
-              id="moodTextInput" 
-              class="url-input" 
-              placeholder="Khoảnh khắc bình yên giữa cuộc đời vội vã…" 
-              style="width: 100%; padding: 10px 14px; font-size: 13.5px;"
-            />
-          </div>
+        <div class="switch-card" id="swCardThreads">
+          <div class="platform-top"><span class="platform-name">Threads</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostThreads" aria-label="Đăng lên Threads" checked><span class="slider"></span></label></div>
+          <p class="platform-desc">Ảnh & video trực tiếp</p>
+          <button type="button" id="threadsStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Threads"><span id="threadsDot" class="dot dot-gray"></span><span id="threadsStatusText">Đang kiểm tra…</span></button>
         </div>
       </div>
-
-      <div id="statusBox" class="status-box" role="status" aria-live="polite"></div>
+      <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook cần tài khoản liên kết với Instagram.</p>
+    </section>
+    <details class="card advanced">
+      <summary>Tùy chọn nội dung</summary>
+      <div class="settings-grid">
+        <div><label for="captionLangSelect" class="setting-label">Ngôn ngữ mô tả</label><select id="captionLangSelect"><option value="en" selected>Tiếng Anh</option><option value="vi">Tiếng Việt</option><option value="both">Anh + Việt</option><option value="raw">Tiếng Trung gốc</option></select></div>
+        <div><label class="check-field"><input type="checkbox" id="chkAsReel" checked><span>Tạo video dọc từ bộ ảnh<br><span class="helper">Tỷ lệ 9:16, chuyển cảnh và ghép nhạc.</span></span></label></div>
+      </div>
+      <div class="overlay-settings"><label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn chữ lên video TikTok</span></label><p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video.</p><div id="moodTextContainer"><label for="moodTextInput" class="field-label">Nội dung chèn · để trống để tạo tự động</label><input type="text" id="moodTextInput" class="url-input" placeholder="Nhập câu chữ của bạn…"></div></div>
+      <p class="help-note">Mỗi mô tả có 5 hashtag và tự loại bỏ @. Threads có thêm một chủ đề phù hợp. Khả năng được đề xuất còn phụ thuộc nội dung và trạng thái tài khoản.</p>
+    </details>
     </div>
+    <section class="card sheet-panel" aria-labelledby="sheetHeading">
+      <div class="sheet-panel-header">
+        <div><h2 id="sheetHeading">Link từ cột A</h2><p class="helper" id="sheetRowCount">Google Sheets</p></div>
+        <div class="sheet-tools"><button type="button" id="btnReloadSheet" class="btn">Tải lại bảng</button><a id="sheetExternalLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở riêng ↗</a></div>
+      </div>
+      <div class="sheet-list" aria-live="polite"><table class="sheet-table" id="sheetTable" hidden><thead><tr><th>Dòng</th><th>Cột A</th></tr></thead><tbody id="sheetRows"></tbody></table><p class="sheet-list-message" id="sheetListMessage">Đang tải cột A…</p></div>
+      <p class="sheet-panel-note">Tự cập nhật mỗi 30 giây. Chọn “Mở riêng” để thêm hoặc sửa link.</p>
+    </section>
+    </main>
+    <div id="statusBox" class="status-box" role="status" aria-live="polite"></div>
 
     <div id="resultSection" class="result-section card">
       <div class="post-header">
@@ -797,7 +209,7 @@
       <!-- Caption & Hashtag Section -->
       <div class="caption-box">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 13px; font-weight: 700; color: #ec4899; display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 13px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
             Mô tả bài đăng & hashtag
           </span>
           <button id="btnCopyCaption" class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;">
@@ -805,6 +217,7 @@
           </button>
         </div>
         <textarea id="captionDisplay" class="caption-textarea" aria-label="Mô tả bài đăng và hashtag"></textarea>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Mọi tài khoản @ trong mô tả sẽ được bỏ trước khi đăng.</div>
       </div>
 
       <div class="actions-bar">
@@ -814,21 +227,22 @@
         <button id="btnManualPostIG" class="btn btn-ig">
           Đăng lại lên Instagram
         </button>
-        <button id="btnManualPostTikTok" class="btn" style="background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); color: #000; font-weight: 700;">
+        <button id="btnManualPostTikTok" class="btn" >
           Đăng lại lên TikTok
         </button>
-        <button id="btnManualPostFB" class="btn" style="background: #1877f2; color: #fff; font-weight: 700;">
+        <button id="btnManualPostFB" class="btn" >
           Đăng lại lên Facebook
         </button>
+        <button id="btnManualPostThreads" class="btn btn-secondary">Đăng riêng lên Threads</button>
         <button id="btnOpenFolder" class="btn btn-secondary" style="display: none;">
           Mở thư mục lưu
         </button>
       </div>
 
-      <div id="musicContainer" style="display: none; background: #0f172a; border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+      <div id="musicContainer" style="display: none; background: var(--bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
           <div>
-            <div id="musicTitle" style="font-size: 14px; font-weight: 700; color: #fff;">Tên bài hát</div>
+            <div id="musicTitle" style="font-size: 14px; font-weight: 700; color: var(--text-main);">Tên bài hát</div>
             <div id="musicArtist" style="font-size: 12px; color: var(--text-muted);">Nghệ sĩ</div>
           </div>
           <div style="display: flex; gap: 8px;">
@@ -844,10 +258,10 @@
       </div>
 
       <!-- Native Video Container -->
-      <div id="videoContainer" style="display: none; background: #0f172a; border: 1px solid var(--card-border); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+      <div id="videoContainer" style="display: none; background: var(--bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
           <div>
-            <div style="font-size: 13.5px; font-weight: 700; color: #38bdf8;">VIDEO GỐC KUAISHOU (KHÔNG WATERMARK)</div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">VIDEO GỐC KUAISHOU (KHÔNG WATERMARK)</div>
             <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Video gốc chất lượng cao, có sẵn âm thanh</div>
           </div>
           <div style="display: flex; gap: 8px;">
@@ -870,6 +284,7 @@
 
       <div id="gallery" class="gallery"></div>
     </div>
+    <footer>Kuaishou Studio · Mô tả không có @</footer>
   </div>
 
   <script>
@@ -877,10 +292,54 @@
     const btnRun = document.getElementById('btnRun');
     const sheetStatus = document.getElementById('sheetStatus');
     const sheetCountdown = document.getElementById('sheetCountdown');
+    let loadingSheetColumn = false;
+    async function refreshSheetColumn() {
+      if (loadingSheetColumn) return;
+      loadingSheetColumn = true;
+      const button = document.getElementById('btnReloadSheet');
+      const message = document.getElementById('sheetListMessage');
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/sheet-column', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.rows)) throw new Error(data.error || 'Không tải được cột A');
+        const rows = document.getElementById('sheetRows');
+        rows.replaceChildren();
+        for (const item of data.rows) {
+          const row = document.createElement('tr');
+          const number = document.createElement('td');
+          number.textContent = item.row;
+          const cell = document.createElement('td');
+          let url;
+          try { url = new URL(item.value.trim()); } catch {}
+          if (url && ['http:', 'https:'].includes(url.protocol)) {
+            const link = document.createElement('a');
+            link.href = url.href;
+            link.textContent = item.value;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            cell.appendChild(link);
+          } else { cell.textContent = item.value; }
+          row.append(number, cell);
+          rows.appendChild(row);
+        }
+        document.getElementById('sheetRowCount').textContent = `${data.rows.length} dòng có nội dung · Google Sheets`;
+        document.getElementById('sheetTable').hidden = data.rows.length === 0;
+        message.hidden = data.rows.length > 0;
+        message.textContent = 'Cột A đang trống. Mở bảng để thêm link.';
+      } catch (error) {
+        message.hidden = false;
+        message.textContent = `Không cập nhật được cột A: ${error.message}`;
+      } finally { loadingSheetColumn = false; button.disabled = false; }
+    }
+    document.getElementById('btnReloadSheet').addEventListener('click', refreshSheetColumn);
+    refreshSheetColumn();
+    setInterval(refreshSheetColumn, 30000);
     let sheetEnabled = false;
     let sheetSettingsLoaded = false;
     let sheetNextRunAt = null;
     let sheetRunning = false;
+    let threadsOnlyMode = false;
 
     function updateSheetCountdown() {
       if (!sheetEnabled) { sheetCountdown.textContent = ''; return; }
@@ -897,6 +356,7 @@
         autoPostIG: chkAutoPostIG.checked,
         autoPostTikTok: chkAutoPostTikTok.checked,
         autoPostFB: chkAutoPostFB.checked,
+        autoPostThreads: chkAutoPostThreads.checked,
         asReel: chkAsReel.checked,
         captionLang: captionLangSelect.value,
         enableMoodQuote: chkAddMoodText.checked
@@ -904,10 +364,16 @@
     }
 
     function renderSheetQueue(data) {
+      threadsOnlyMode = Boolean(data.threadsOnly);
+      if (threadsOnlyMode) {
+        [swCardIG, swCardTikTok, swCardFB].forEach(card => { card.style.display = 'none'; });
+        ['btnManualPostIG', 'btnManualPostTikTok', 'btnManualPostFB'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+      }
       if (!sheetSettingsLoaded && data.options) {
         chkAutoPostIG.checked = data.options.autoPostIG;
         chkAutoPostTikTok.checked = data.options.autoPostTikTok;
         chkAutoPostFB.checked = data.options.autoPostFB;
+        chkAutoPostThreads.checked = Boolean(data.options.autoPostThreads);
         chkAsReel.checked = data.options.asReel;
         chkAddMoodText.checked = data.options.enableMoodQuote;
         captionLangSelect.value = data.options.captionLang;
@@ -917,6 +383,9 @@
       sheetEnabled = data.enabled;
       sheetRunning = data.running;
       sheetNextRunAt = data.nextRunAt;
+      document.getElementById('btnPauseQueue').hidden = !sheetEnabled || threadsOnlyMode;
+      moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
+      updateSwitchUI();
       updateSheetCountdown();
       const latestThreadsWarning = data.items?.find(item => item.warning)?.warning;
       sheetStatus.textContent = data.connectionError
@@ -937,6 +406,8 @@
     const chkAutoPostIG = document.getElementById('chkAutoPostIG');
     const chkAutoPostTikTok = document.getElementById('chkAutoPostTikTok');
     const chkAutoPostFB = document.getElementById('chkAutoPostFB');
+    const chkAutoPostThreads = document.getElementById('chkAutoPostThreads');
+    const swCardThreads = document.getElementById('swCardThreads');
     const swCardIG = document.getElementById('swCardIG');
     const swCardTikTok = document.getElementById('swCardTikTok');
     const swCardFB = document.getElementById('swCardFB');
@@ -946,9 +417,9 @@
     const moodTextInput = document.getElementById('moodTextInput');
     const moodTextContainer = document.getElementById('moodTextContainer');
 
-    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
+    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
       input.addEventListener('change', () => setTimeout(async () => {
-        if (!sheetSettingsLoaded) return;
+        if (!sheetSettingsLoaded || threadsOnlyMode) return;
         try {
           const response = await fetch('/api/sheet-queue', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1006,29 +477,42 @@
     let currentResult = null;
     let isIgLoggedIn = false;
     let isTikTokLoggedIn = false;
+    let isThreadsLoggedIn = false;
+    async function checkThreadsStatus() {
+      try {
+        const response = await fetch('/api/threads/status');
+        const data = await response.json();
+        isThreadsLoggedIn = Boolean(data.loggedIn);
+        document.getElementById('threadsDot').className = `dot ${isThreadsLoggedIn ? 'dot-green' : 'dot-gray'}`;
+        document.getElementById('threadsStatusText').textContent = isThreadsLoggedIn ? 'Đã kết nối' : data.loginInProgress ? 'Đang đăng nhập…' : 'Bấm để đăng nhập';
+        document.getElementById('threadsStatusBtn').title = data.loginError || 'Bấm để đăng nhập Threads';
+      } catch { document.getElementById('threadsStatusText').textContent = 'Chưa kết nối'; }
+    }
+    checkThreadsStatus();
+    setInterval(checkThreadsStatus, 5000);
+    document.getElementById('threadsStatusBtn').addEventListener('click', async () => {
+      const statusButton = document.getElementById('threadsStatusBtn');
+      if (statusButton.dataset.opening === 'true') return;
+      statusButton.dataset.opening = 'true';
+      try {
+        const response = await fetch('/api/threads/login', { method: 'POST' });
+        if (response.status === 404) throw new Error('Server đang chạy bản cũ. Khởi động lại npm run ui để có chức năng Threads.');
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Không mở được đăng nhập Threads');
+        showStatus('Đăng nhập Threads trong cửa sổ vừa mở. Trạng thái kết nối sẽ tự cập nhật.', 'loading');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally { delete statusButton.dataset.opening; }
+    });
 
     // Toggle switch UI states & button text update
     function updateSwitchUI() {
       swCardIG.classList.toggle('active-ig', chkAutoPostIG.checked);
       swCardTikTok.classList.toggle('active-tiktok', chkAutoPostTikTok.checked);
       swCardFB.classList.toggle('active-fb', chkAutoPostFB.checked);
+      swCardThreads.classList.toggle('active-ig', chkAutoPostThreads.checked);
 
-      btnRun.textContent = 'Bắt đầu';
+      btnRun.textContent = urlInput.value.trim() ? 'Đăng link này' : (sheetEnabled ? 'Hàng đợi đang bật' : 'Bắt đầu hàng đợi');
     }
-
-    // Click anywhere on card to toggle
-    [
-      { card: swCardIG, input: chkAutoPostIG },
-      { card: swCardTikTok, input: chkAutoPostTikTok },
-      { card: swCardFB, input: chkAutoPostFB }
-    ].forEach(({ card, input }) => {
-      card.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('slider')) {
-          input.checked = !input.checked;
-          input.dispatchEvent(new Event('change'));
-        }
-      });
-    });
 
     // Handle Facebook & Instagram switch dependency
     chkAutoPostFB.addEventListener('change', () => {
@@ -1046,6 +530,7 @@
     });
 
     chkAutoPostTikTok.addEventListener('change', updateSwitchUI);
+    chkAutoPostThreads.addEventListener('change', updateSwitchUI);
     updateSwitchUI();
 
     // Check IG Login Status
@@ -1056,18 +541,18 @@
         isIgLoggedIn = !!data.loggedIn;
         if (isIgLoggedIn) {
           igDot.className = 'dot dot-green';
-          igStatusText.textContent = 'Instagram: Đã đăng nhập';
+          igStatusText.textContent = 'Đã đăng nhập';
           fbDot.className = 'dot dot-green';
-          fbStatusText.textContent = 'Facebook: Sẵn sàng (qua IG)';
+          fbStatusText.textContent = 'Sẵn sàng qua Instagram';
         } else {
           igDot.className = 'dot dot-gray';
-          igStatusText.textContent = 'Instagram: Bấm để đăng nhập';
+          igStatusText.textContent = 'Bấm để đăng nhập';
           fbDot.className = 'dot dot-gray';
-          fbStatusText.textContent = 'Facebook: Cần đăng nhập IG';
+          fbStatusText.textContent = 'Cần đăng nhập Instagram';
         }
       } catch {
-        igStatusText.textContent = 'Instagram: Chưa kết nối';
-        fbStatusText.textContent = 'Facebook: Chưa kết nối';
+        igStatusText.textContent = 'Chưa kết nối';
+        fbStatusText.textContent = 'Chưa kết nối';
       }
     }
     checkIGStatus();
@@ -1093,13 +578,13 @@
         isTikTokLoggedIn = !!data.loggedIn;
         if (isTikTokLoggedIn) {
           tiktokDot.className = 'dot dot-green';
-          tiktokStatusText.textContent = 'TikTok: Đã đăng nhập';
+          tiktokStatusText.textContent = 'Đã đăng nhập';
         } else {
           tiktokDot.className = 'dot dot-gray';
-          tiktokStatusText.textContent = 'TikTok: Bấm để đăng nhập';
+          tiktokStatusText.textContent = 'Bấm để đăng nhập';
         }
       } catch {
-        tiktokStatusText.textContent = 'TikTok: Chưa kết nối';
+        tiktokStatusText.textContent = 'Chưa kết nối';
       }
     }
     checkTikTokStatus();
@@ -1148,6 +633,22 @@
       setTimeout(() => { btnCopyCaption.textContent = 'Sao chép'; }, 2000);
     });
 
+    document.getElementById('btnPauseQueue').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/sheet-queue', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Không thể tạm dừng hàng đợi');
+        renderSheetQueue(data);
+        showStatus('Đã tạm dừng hàng đợi. Lượt đang xử lý sẽ hoàn tất trước khi dừng.', 'success');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally { button.disabled = false; }
+    });
+
     // 1-Click Run Pipeline
     btnRun.addEventListener('click', handleRun);
     urlInput.addEventListener('input', updateSwitchUI);
@@ -1158,6 +659,7 @@
     async function handleRun() {
       const input = urlInput.value.trim();
       if (!input) {
+        if (threadsOnlyMode) { showStatus('Dán link video hoặc bộ ảnh để đăng riêng lên Threads.', 'error'); return; }
         if (sheetEnabled) {
           showStatus('Hàng đợi đang chạy. Lượt tiếp theo sẽ theo đồng hồ bên dưới.', 'loading');
           return;
@@ -1181,6 +683,7 @@
       const shouldPostIG = chkAutoPostIG.checked;
       const shouldPostTikTok = chkAutoPostTikTok.checked;
       const shouldPostFB = chkAutoPostFB.checked;
+      const shouldPostThreads = chkAutoPostThreads.checked;
 
       btnRun.disabled = true;
       btnOpenFolder.style.display = 'none';
@@ -1192,6 +695,9 @@
       showStatus(statusMsg, 'loading');
 
       try {
+        if (shouldPostThreads && !isThreadsLoggedIn) {
+          throw new Error('Chưa đăng nhập Threads. Bấm nút Threads phía trên để kết nối trước.');
+        }
         if ((shouldPostIG || shouldPostFB) && !isIgLoggedIn) {
           showStatus('Bạn chưa đăng nhập Instagram! (Facebook cũng dùng phiên Instagram liên kết). Vui lòng bấm vào nút "Instagram: Bấm để đăng nhập" ở góc trên trước.', 'error');
           btnRun.disabled = false;
@@ -1208,6 +714,7 @@
         if (shouldPostIG) activeTargets.push('Instagram');
         if (shouldPostTikTok) activeTargets.push('TikTok');
         if (shouldPostFB) activeTargets.push('Facebook');
+        if (shouldPostThreads) activeTargets.push('Threads');
 
         if (activeTargets.length > 0) {
           showStatus(`Đang tải nội dung, tạo Caption & tự động đăng lên: ${activeTargets.join(' + ')}...`, 'loading');
@@ -1235,6 +742,7 @@
             autoPostIG: shouldPostIG,
             autoPostTikTok: shouldPostTikTok,
             autoPostFB: shouldPostFB,
+            autoPostThreads: shouldPostThreads,
             asReel: chkAsReel.checked,
             captionLang: captionLangSelect.value,
             jobId,
@@ -1244,6 +752,10 @@
         });
 
         const data = await res.json();
+        if (data.partialFailure && data.post) {
+          currentResult = data;
+          renderResult(data);
+        }
         if (!res.ok || !data.success) {
           throw new Error(data.error || 'Quy trình thất bại');
         }
@@ -1255,6 +767,7 @@
         if (data.igPosted) postedList.push('INSTAGRAM');
         if (data.tiktokPosted) postedList.push('TIKTOK');
         if (data.fbPosted) postedList.push('FACEBOOK');
+        if (data.threadsPosted) postedList.push('THREADS');
 
         const typeStr = data.isVideo ? 'video gốc' : `${data.count} ảnh`;
         let successMsg = `Hoàn tất! Đã tải ${typeStr}.`;
@@ -1264,9 +777,8 @@
         } else {
           successMsg += ` Đã lưu vào: ${data.downloadPath}`;
         }
-        if (data.threadsCrosspostEnabled) successMsg += ' Đã bật chia sẻ sang Threads trên Instagram.';
         if (data.threadsWarning) successMsg += ` Threads: ${data.threadsWarning}`;
-        showStatus(successMsg, 'success');
+        showStatus(successMsg, data.threadsWarning ? 'error' : 'success');
 
         btnOpenFolder.style.display = data.downloadPath ? 'inline-flex' : 'none';
         if (data.downloadPath) {
@@ -1394,6 +906,23 @@
 
       resultSection.style.display = 'block';
     }
+
+    document.getElementById('btnManualPostThreads').addEventListener('click', async event => {
+      if (!currentResult) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      showStatus('Đang đăng riêng lên Threads…', 'loading');
+      try {
+        const response = await fetch('/api/threads/post', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ post: { ...currentResult.post, asReel: chkAsReel.checked }, customCaption: captionDisplay.value })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Threads chưa xác nhận đăng thành công');
+        showStatus(data.message, 'success');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally { button.disabled = false; }
+    });
 
     // Manual re-post to Instagram
     btnManualPostIG.addEventListener('click', async () => {

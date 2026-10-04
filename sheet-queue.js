@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing';
-const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, asReel: true, captionLang: 'en', enableMoodQuote: true };
+const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, asReel: true, captionLang: 'en', enableMoodQuote: true };
 
 export function rowLink(value) {
   const match = String(value || '').match(/https?:\/\/[^\s"<>]+/i);
@@ -111,7 +111,24 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       } else if (url && !['awaiting_clear', 'failed_awaiting_clear'].includes(entry.status)) {
         entry.status = 'running'; entry.warning = null; entry.updatedAt = new Date().toISOString(); save();
         try {
-          const result = await runPipeline(url, { ...state.options });
+          const requested = { ...state.options };
+          for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted']]) {
+            if (entry.published?.[flag]) requested[option] = false;
+          }
+          const result = await runPipeline(url, requested);
+          entry.published = { ...entry.published };
+          for (const flag of ['igPosted', 'fbPosted', 'tiktokPosted', 'threadsPosted']) {
+            entry.published[flag] = Boolean(entry.published[flag] || result[flag]);
+          }
+          if (result.partialFailure) {
+            entry.status = 'partial';
+            entry.error = result.error || 'Một nền tảng chưa đăng thành công';
+            entry.updatedAt = new Date().toISOString();
+            state.enabled = false;
+            state.error = `Dòng ${row}: ${entry.error}. Link được giữ lại; kiểm tra trước khi bấm Bắt đầu để thử lại nền tảng chưa thành công.`;
+            save();
+            return;
+          }
           if (!result.success) throw new Error(result.error || 'Quy trình thất bại');
           entry.status = 'awaiting_clear'; entry.error = null;
           entry.warning = result.threadsWarning || null;
@@ -153,7 +170,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       const startNow = enabled === true && !wasEnabled && runNow && !busy;
       if (typeof enabled === 'boolean') {
         state.enabled = enabled;
-        if (enabled && !wasEnabled && ['failed', 'interrupted'].includes(state.items[String(state.cursor)]?.status)) state.items[String(state.cursor)].status = 'pending';
+        if (enabled && !wasEnabled && ['failed', 'interrupted', 'partial'].includes(state.items[String(state.cursor)]?.status)) state.items[String(state.cursor)].status = 'pending';
         if (startNow) state.cursor = 1;
         if (enabled) { state.error = null; state.blankCount = 0; }
       }

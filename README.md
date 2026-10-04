@@ -9,8 +9,16 @@ Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (Q
 - Tải không dính logo watermark: Lấy trực tiếp từ server CDN với chất lượng gốc cao nhất.
 - Hỗ trợ cả video ngắn, ảnh đơn và album nhiều ảnh.
 - Tự động tải kèm nhạc nền (audio.m4a) nếu bài đăng có nhạc riêng.
-- Bộ tạo Video điện ảnh 30fps (Ken Burns Zoom & Slideshow): Tự động ghép album ảnh thành video dọc 9:16 chuẩn Reels/TikTok/Shorts, có chuyển động mượt mà và màu sắc tối ưu thuật toán lên xu hướng.
+- Bộ tạo Video điện ảnh 30fps (Ken Burns Zoom & Slideshow): Tự động ghép album ảnh thành video dọc 9:16 chuẩn Reels/TikTok/Shorts, có chuyển động và màu sắc được xử lý cho dễ xem.
 - Lưu thông tin tiêu đề, tác giả vào file info.txt.
+
+## Khi video có rất ít lượt xem
+
+- Xem TikTok Studio → Analytics của từng video để biết video có đủ điều kiện xuất hiện trên For You hay không. Kiểm tra Account Status trên Instagram để xem tài khoản và bài đăng có được đề xuất không.
+- Video tải từ Kuaishou vẫn là nội dung đăng lại dù không có watermark. Chỉ đăng nội dung bạn có quyền sử dụng; ưu tiên video tự tạo hoặc có phần đóng góp sáng tạo đáng kể. Công cụ không thể bảo đảm lượt xem.
+- Caption mặc định hiện chỉ thêm tối đa 4 hashtag khi tiêu đề cho thấy chủ đề rõ ràng. Hãy sửa caption theo từng video, nói rõ điều người xem sẽ thấy hoặc nhận được; không dùng một bộ hashtag chung cho toàn bộ hàng đợi.
+- TikTok có thể hiển thị cảnh báo bản quyền hoặc điều kiện đăng. Công cụ sẽ dừng ở cảnh báo và giữ file đã tải để bạn kiểm tra. Nếu không có xác nhận đăng thành công, công cụ báo lỗi để tránh đăng lại trùng.
+- Để chẩn đoán nguyên nhân, so sánh vài video tự tạo với vài video đăng lại cùng chủ đề trong 1–2 tuần. Ghi lại lượt tiếp cận người chưa theo dõi, thời gian xem, tỷ lệ xem hết, chia sẻ và trạng thái đủ điều kiện đề xuất; số view riêng lẻ chưa đủ để kết luận tài khoản bị hạn chế.
 
 ---
 
@@ -58,6 +66,14 @@ node download_kuaishou.js "link_1" "link_2" "link_3"
 ---
 
 ## Tính năng Tự Động Đăng Đa Nền Tảng (Instagram, TikTok, Facebook)
+Threads được đăng trực tiếp bằng phiên đăng nhập riêng, không dùng công tắc chia sẻ của Instagram. Bấm **Threads: Bấm để đăng nhập** trên giao diện, hoàn tất đăng nhập trong cửa sổ mở ra, rồi bật công tắc **Threads**. Tùy chọn này cũng áp dụng cho hàng đợi Google Sheets. Nút **Đăng riêng lên Threads** cho phép đăng hoặc thử lại Threads mà không đăng lại Instagram/TikTok. Mô tả Threads không có tài khoản `@` và tối đa 500 ký tự; nếu vượt giới hạn, công cụ báo lỗi để bạn rút gọn. Chỉ báo Threads thành công khi nhận được xác nhận từ Threads; nếu lỗi, giữ lại file và hiển thị cảnh báo riêng.
+
+Nếu server đang chạy bản cũ, dừng bằng `Ctrl+C` ở terminal đang chạy rồi chạy lại `npm run ui`. Có thể mở đăng nhập Threads độc lập bằng `npm run threads:login`; sau khi đăng nhập thành công, trạng thái trên giao diện tự cập nhật.
+
+Để dùng Threads trong khi ứng dụng chính còn chạy bản cũ, chạy `npm run ui:threads` và mở `http://localhost:3001`. Phiên này chỉ đăng Threads bằng link bạn nhập, không chạy hoặc sửa hàng đợi Google Sheets của ứng dụng chính. Chạy `npm run test:threads-api` để kiểm tra API, phiên đăng nhập và giao diện của phiên này; lệnh kiểm tra không đăng bài thật.
+
+Hàng đợi đầy đủ có thể chạy bằng `npm run ui:all` tại `http://localhost:3002`. Tạm dừng hàng đợi ở server cũ trước khi dùng server này. Bật cả Instagram, Facebook, TikTok và Threads để mỗi link trong cột A được gửi tới cả bốn nền tảng. Nếu một nền tảng lỗi, công cụ giữ link và dừng hàng đợi, lưu những nền tảng đã đăng thành công. Khi bấm Bắt đầu lại, công cụ chỉ thử các nền tảng chưa thành công. Facebook được chia sẻ qua Instagram; chỉ đánh dấu Facebook thành công khi xác nhận công tắc chia sẻ đã bật.
+
 1. **Công tắc độc lập từng nền tảng**:
    - Giao diện có 3 công tắc gạt riêng biệt:
      - **Instagram**: Đăng Reel video (video gốc hoặc reel tạo từ ảnh).

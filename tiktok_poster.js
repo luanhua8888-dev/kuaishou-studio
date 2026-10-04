@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { removeCaptionMentions } from './caption-text.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -202,7 +203,7 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
         await page.keyboard.press('Control+A');
         await page.keyboard.press('Backspace');
         await page.waitForTimeout(500);
-        await page.keyboard.insertText(caption);
+        await page.keyboard.insertText(removeCaptionMentions(caption));
         await page.waitForTimeout(1500);
       }
     }
@@ -225,33 +226,37 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
     }
 
     // 4. Click Post
+    // Upload completion is separate from the copyright/content scans.
+    if (/Đang kiểm tra\.|Checking[.…]/i.test(await page.locator('body').innerText())) {
+      console.log('[TikTok] Đang chờ kiểm tra bản quyền/nội dung hoàn tất trước khi đăng...');
+      await page.waitForFunction(() => !/Đang kiểm tra\.|Checking[.…]/i.test(document.body.innerText), null, { timeout: 660000 });
+    }
     console.log('[TikTok] Đang bấm Đăng (Post) lên TikTok...');
     await postBtn.scrollIntoViewIfNeeded().catch(() => {});
     await postBtn.click({ force: true });
     await page.waitForTimeout(2000);
 
-    // Kiểm tra nếu nút Post vẫn chưa nhận, thử click lại
-    if (await postBtn.isVisible().catch(() => false)) {
-      const isStillDisabled = await postBtn.evaluate(el => el.disabled || el.getAttribute('aria-disabled') === 'true').catch(() => true);
-      if (!isStillDisabled) {
-        console.log('[TikTok] Thử nhấn lại nút Đăng...');
-        await postBtn.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(1500);
-      }
-    }
+    // A visible Post button can remain during processing; clicking twice risks duplicate posts.
 
-    // 4.5. Xử lý hộp thoại xác nhận nếu xuất hiện (ví dụ "Post anyway" / "Vẫn đăng" khi đang quét bản quyền nhạc)
+    // Stop on upload warnings so the creator can inspect rights and eligibility.
     try {
       const modalConfirmBtn = page.locator('button, div[role="button"]').filter({
         hasText: /^(Post anyway|Vẫn đăng|Đăng ngay|Tiếp tục đăng|Tiếp tục|Confirm|Xác nhận)$/i
       }).last();
 
       if (await modalConfirmBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
-        console.log('[TikTok] Phát hiện hộp thoại xác nhận, bấm:', (await modalConfirmBtn.innerText().catch(() => '')).trim());
+        const dialogText = await page.locator('[role="dialog"]').last().innerText().catch(() => '');
+        const buttonText = (await modalConfirmBtn.innerText().catch(() => '')).trim();
+        if (/post anyway|vẫn đăng|copyright|bản quyền|original|nguyên bản|violation|vi phạm|ineligible|không đủ điều kiện/i.test(`${buttonText} ${dialogText}`)) {
+          throw new Error(`TikTok hiển thị cảnh báo trước khi đăng: ${dialogText.slice(0, 300) || buttonText}. Hãy kiểm tra trong TikTok Studio.`);
+        }
+        console.log('[TikTok] Phát hiện hộp thoại xác nhận, bấm:', buttonText);
         await modalConfirmBtn.click({ force: true });
         await page.waitForTimeout(2000);
       }
-    } catch {}
+    } catch (error) {
+      if (error.message.startsWith('TikTok hiển thị cảnh báo')) throw error;
+    }
 
     // 5. Wait for success confirmation
     console.log('[TikTok] Đang chờ xác nhận đăng bài TikTok...');
@@ -266,10 +271,7 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
 
         const text = await page.evaluate(() => document.body.innerText || '');
         if (
-          text.includes('Video của bạn đã được tải lên') ||
           text.includes('Video của bạn đã được đăng') ||
-          text.includes('Your video has been uploaded') ||
-          text.includes('Your video is being uploaded') ||
           text.includes('Quản lý bài đăng') ||
           text.includes('Quản lý video') ||
           text.includes('Manage your posts') ||
@@ -285,7 +287,7 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
 
     const isSuccess = await checkSuccess();
     if (!isSuccess) {
-      console.log('[TikTok] Đã bấm Đăng và xác nhận, kết thúc tiến trình.');
+      throw new Error('TikTok chưa xác nhận đăng thành công. Hãy kiểm tra TikTok Studio trước khi thử lại để tránh đăng trùng.');
     }
 
     console.log('[TikTok] Đăng video lên TikTok hoàn tất!');

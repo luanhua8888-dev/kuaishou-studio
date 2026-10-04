@@ -16,6 +16,8 @@ scratch_*
 *.log
 after_turning_off_crosspost.png
 ig_error.png
+ig_preflight.png
+threads_error.png
 tiktok_preview.png
 ui_preview.png
 test_mood.txt

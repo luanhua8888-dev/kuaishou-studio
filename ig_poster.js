@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { removeCaptionMentions } from './caption-text.js';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
@@ -135,7 +136,7 @@ async function dismissPopups(page) {
 /**
  * Automatically post images or Reel video to Instagram
  */
-export async function postToInstagram({ imagePaths, caption, headless = false, shareToFacebook = false, shareToThreads = false }) {
+export async function postToInstagram({ imagePaths, caption, headless = false, shareToFacebook = false, prepareOnly = false }) {
   if (!imagePaths || imagePaths.length === 0) {
     throw new Error('Danh sách file tải lên trống');
   }
@@ -303,25 +304,32 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
       const captionBox = dialog.locator('div[aria-label="Write a caption..."], div[aria-label="Viết chú thích..."], div[aria-label="Thêm chú thích..."], div[role="textbox"]').first();
       await captionBox.waitFor({ state: 'visible', timeout: 10000 });
       await captionBox.click({ force: true });
-      await page.keyboard.insertText(caption);
+      await page.keyboard.insertText(removeCaptionMentions(caption));
       await page.waitForTimeout(1500);
     }
 
-    // 6.5. Xử lý chia sẻ chéo sang Facebook & Threads theo tuỳ chọn
+    let facebookShared = false;
+    // Configure Facebook sharing and retain its verified state separately from Instagram.
     try {
       console.log(`[Instagram] Kiểm tra cấu hình chia sẻ Facebook (Mục tiêu: ${shareToFacebook ? 'BẬT' : 'TẮT'})...`);
 
       // Mở rộng phần "Chia sẻ lên" nếu đang bị thu gọn
-      const shareSection = dialog.locator('div, span, button').filter({ hasText: /^(Chia sẻ lên|Share to)$/i }).first();
-      let fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: dialog.locator('input[role="switch"]') }).last();
-      let fbSwitch = fbRow.locator('input[role="switch"]').last();
+      const shareSection = dialog.getByText(/^(Chia sẻ lên|Share to)$/i).first();
+      let fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: page.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]') }).last();
+      let fbSwitch = fbRow.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]').last();
 
       if ((await fbSwitch.count()) === 0 && await shareSection.isVisible({ timeout: 1500 }).catch(() => false)) {
         console.log('[Instagram] Mở rộng danh sách Chia sẻ lên...');
-        await shareSection.click().catch(() => {});
+        await shareSection.click();
         await page.waitForTimeout(1000);
-        fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: dialog.locator('input[role="switch"]') }).last();
-        fbSwitch = fbRow.locator('input[role="switch"]').last();
+        fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: page.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]') }).last();
+        fbSwitch = fbRow.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]').last();
+        if (await fbSwitch.count() === 0) {
+          await shareSection.locator('xpath=..').click();
+          await page.waitForTimeout(1000);
+          fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: page.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]') }).last();
+          fbSwitch = fbRow.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]').last();
+        }
       }
 
       if ((await fbSwitch.count()) > 0) {
@@ -365,6 +373,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
             console.log('[Instagram] Công tắc chia sẻ Facebook đã TẮT sẵn.');
           }
         }
+        facebookShared = shareToFacebook && await fbSwitch.evaluate(el => el.checked || el.getAttribute('aria-checked') === 'true');
       } else {
         console.log('[Instagram] Không tìm thấy công tắc chia sẻ Facebook trong giao diện Instagram.');
       }
@@ -373,35 +382,30 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
       console.log('[Instagram] Bỏ qua bước cấu hình chia sẻ Facebook:', e.message);
     }
 
-    let threadsCrosspostEnabled = false;
-    let threadsWarning = null;
-    try {
-      const threadsRow = dialog.locator('div').filter({ hasText: /Threads/i }).filter({ has: dialog.locator('[role="switch"]') }).last();
-      const threadsSwitch = threadsRow.locator('[role="switch"]').last();
-      if ((await threadsSwitch.count()) > 0 && (await threadsRow.locator('[role="switch"]').count()) === 1) {
-        const isThreadsChecked = (await threadsSwitch.evaluate(el => el.checked).catch(() => false)) || 
-                                ((await threadsSwitch.getAttribute('aria-checked').catch(() => 'false')) === 'true');
-        if (shareToThreads && !isThreadsChecked) {
-          console.log('[Instagram] Bật chia sẻ sang Threads...');
-          await threadsSwitch.click();
-          await page.waitForTimeout(800);
-        } else if (!shareToThreads && isThreadsChecked) {
-          console.log('[Instagram] Tắt chia sẻ sang Threads...');
-          await threadsSwitch.click();
-          await page.waitForTimeout(800);
+    // Threads is posted independently. Disable native sharing when its own switch is present.
+    for (const toggle of await dialog.getByRole('switch').all()) {
+      const isThreads = await toggle.evaluate(element => {
+        if (/Threads/i.test(element.getAttribute('aria-label') || '')) return true;
+        let parent = element.parentElement;
+        for (let i = 0; parent && i < 5; i++, parent = parent.parentElement) {
+          const text = parent.innerText || '';
+          if (/Threads/i.test(text) && !/Facebook|Instagram/i.test(text) && parent.querySelectorAll('[role="switch"]').length === 1) return true;
         }
-        threadsCrosspostEnabled = shareToThreads && (
-          (await threadsSwitch.evaluate(el => el.checked).catch(() => false)) ||
-          ((await threadsSwitch.getAttribute('aria-checked').catch(() => 'false')) === 'true')
-        );
-        if (shareToThreads && !threadsCrosspostEnabled) threadsWarning = 'Không bật được chia sẻ Threads trong Instagram.';
-      } else if (shareToThreads) {
-        threadsWarning = 'Instagram không hiển thị công tắc chia sẻ Threads cho bài này.';
+        return false;
+      });
+      if (isThreads && await toggle.evaluate(el => el.checked || el.getAttribute('aria-checked') === 'true')) {
+        await toggle.click();
+        if (await toggle.evaluate(el => el.checked || el.getAttribute('aria-checked') === 'true')) {
+          throw new Error('Không tắt được chia sẻ Threads trong Instagram; chưa đăng để tránh tạo bài trùng.');
+        }
       }
-    } catch (e) {
-      threadsWarning = `Không cấu hình được Threads: ${e.message}`;
     }
-    if (threadsWarning) console.warn(`[Instagram] ${threadsWarning}`);
+
+    if (prepareOnly) {
+      await page.screenshot({ path: path.join(__dirname, 'ig_preflight.png') });
+      await browser.close();
+      return { success: false, prepared: true, facebookShared };
+    }
 
     // 7. Click "Share" (Chia sẻ)
     console.log('[Instagram] Đang bấm Đăng (Chia sẻ)...');
@@ -469,7 +473,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     await context.storageState({ path: AUTH_FILE });
     await page.waitForTimeout(3000);
     await browser.close();
-    return { success: true, message: 'Đăng bài lên Instagram thành công!', threadsCrosspostEnabled, threadsWarning };
+    return { success: true, facebookShared, message: 'Đăng bài lên Instagram thành công!' };
   } catch (err) {
     console.error('[Instagram] Lỗi đăng bài:', err.message);
     try {

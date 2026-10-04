@@ -1,5 +1,7 @@
 import http from 'http';
-import { normalizeCaptionText, readJsonBody } from './caption-text.js';
+import { normalizeCaptionText, removeCaptionMentions, readJsonBody } from './caption-text.js';
+import { relevantHashtags, ensureCaptionHashtags } from './relevance-tags.js';
+import { buildThreadsCaption } from './threads-caption.js';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
@@ -8,23 +10,28 @@ import { Readable } from 'stream';
 import util from 'util';
 import { checkLoginStatus, interactiveLogin, postToInstagram } from './ig_poster.js';
 import { checkLoginStatus as checkTikTokStatus, postToTikTok } from './tiktok_poster.js';
-import { createSheetQueue, SHEET_URL } from './sheet-queue.js';
+import { checkLoginStatus as checkThreadsStatus, startInteractiveLogin as loginThreads, loginState as threadsLoginState, postToThreads } from './threads_poster.js';
+import { createSheetQueue, SHEET_URL, readSettings } from './sheet-queue.js';
 import { createGoogleSheet } from './google-sheet.js';
 import { getPostPage, findPhotoData } from './kuaishou-page.js';
+import { publishPlatforms } from './publish-platforms.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const execPromise = util.promisify(exec);
 
-const PORT = 3000;
+const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7) || 3000);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Cổng server không hợp lệ.');
+const THREADS_ONLY = process.argv.includes('--threads-only');
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 const pipelineProgress = new Map();
+const googleSheet = createGoogleSheet({ settingsPath: path.join(__dirname, '.setting') });
 const sheetQueue = createSheetQueue({
   statePath: path.join(__dirname, 'sheet-queue-state.json'),
   settingsPath: path.join(__dirname, '.setting'),
-  sheet: createGoogleSheet({ settingsPath: path.join(__dirname, '.setting') }),
+  sheet: googleSheet,
   async runPipeline(url, options) {
     const response = await fetch(`http://127.0.0.1:${PORT}/api/run-pipeline`, {
       method: 'POST',
@@ -333,8 +340,8 @@ async function translateText(text, targetLang = 'vi') {
  * Generate viral Instagram caption and targeted hashtags in Vietnamese, English or Bilingual
  */
 async function generateCaptionAndHashtags(rawTitle, author, musicName = null, musicArtist = null, musicUrl = null, lang = 'en') {
-  let cleanTitle = normalizeCaptionText(rawTitle).replace(/\r\n|\r|\n/g, ' ').trim();
-  cleanTitle = cleanTitle.replace(/#[\w\u4e00-\u9fa5]+/g, '').trim();
+  let cleanTitle = removeCaptionMentions(normalizeCaptionText(rawTitle)).replace(/\r\n|\r|\n/g, ' ').trim();
+  cleanTitle = cleanTitle.replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s+/g, ' ').trim();
 
   let titleLine = cleanTitle || (lang === 'en' ? 'Peaceful moments' : 'Khoảnh khắc bình yên');
   if (cleanTitle) {
@@ -357,35 +364,8 @@ async function generateCaptionAndHashtags(rawTitle, author, musicName = null, mu
 
   let caption = `${titleLine}\n\n`;
 
-  let generalHashtags = [];
-  if (lang === 'vi') {
-    generalHashtags = [
-      '#binhyen', '#tamtrang', '#thanhxuan', '#chill', '#xuhuong',
-      '#aesthetic', '#vibes', '#mood', '#photography', '#photooftheday',
-      '#explorepage', '#viral', '#reels', '#cuocsong', '#fyp'
-    ];
-  } else if (lang === 'en') {
-    generalHashtags = [
-      '#aesthetic', '#vibes', '#mood', '#photography', '#cinematic',
-      '#instamood', '#dailyvibes', '#photooftheday', '#explorepage',
-      '#viral', '#visuals', '#artofvisuals', '#reels', '#peaceful', '#fyp'
-    ];
-  } else if (lang === 'both') {
-    generalHashtags = [
-      '#binhyen', '#tamtrang', '#chill', '#xuhuong',
-      '#aesthetic', '#vibes', '#mood', '#photography', '#cinematic',
-      '#instamood', '#dailyvibes', '#photooftheday', '#explorepage',
-      '#viral', '#reels', '#fyp'
-    ];
-  } else {
-    // raw (Tiếng Trung)
-    generalHashtags = [
-      '#aesthetic', '#vibes', '#mood', '#photography', '#explorepage', '#viral'
-    ];
-  }
-
-  const hashtags = generalHashtags.join(' ');
-  const fullText = `${caption}${hashtags}`;
+  const hashtags = relevantHashtags(`${removeCaptionMentions(rawTitle)} ${titleLine}`, lang);
+  const fullText = hashtags ? `${caption}${hashtags}` : caption.trim();
 
   // Tạo câu chữ tâm trạng tiếng Việt chuẩn (chỉ chữ thuần túy, không icon/emoji/gif) dành riêng cho video TikTok
   let moodQuoteVi = '';
@@ -659,6 +639,11 @@ async function downloadImageAsJpg(url, destJpgPath) {
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+  if (THREADS_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post'].includes(reqUrl.pathname)) {
+    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: false, error: 'Cửa sổ này chỉ đăng Threads. Dùng ứng dụng chính cho nền tảng khác.' }));
+    return;
+  }
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -891,11 +876,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 8. API: Post to Instagram / Facebook
-  if (req.method === 'POST' && (reqUrl.pathname === '/api/ig/post' || reqUrl.pathname === '/api/fb/post')) {
+  if (req.method === 'GET' && reqUrl.pathname === '/api/threads/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, loggedIn: await checkThreadsStatus(), ...threadsLoginState() }));
+    return;
+  }
+
+  if (req.method === 'POST' && reqUrl.pathname === '/api/threads/login') {
+    try {
+      const { alreadyOpen } = await loginThreads();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, message: alreadyOpen ? 'Cửa sổ đăng nhập Threads đang mở.' : 'Đã mở cửa sổ đăng nhập Threads.' }));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: `Không mở được đăng nhập Threads: ${error.message}` }));
+    }
+    return;
+  }
+
+  // Prepare local media for manual posts to Instagram, Facebook or Threads.
+  if (req.method === 'POST' && ['/api/ig/post', '/api/fb/post', '/api/threads/post'].includes(reqUrl.pathname)) {
     try {
       const { post, customCaption, shareToFacebook } = await readJsonBody(req);
       const isFbOnly = reqUrl.pathname === '/api/fb/post';
+      const isThreadsOnly = reqUrl.pathname === '/api/threads/post';
       const doShareFB = isFbOnly || Boolean(shareToFacebook);
 
       if (!post || (!post.isVideo && (!Array.isArray(post.images) || post.images.length === 0))) {
@@ -946,13 +950,18 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Call Playwright automation to post
-      const captionText = customCaption !== undefined ? customCaption : post.title;
+      const captionText = ensureCaptionHashtags(removeCaptionMentions(customCaption !== undefined ? customCaption : post.title), 'en', post.title);
+      if (isThreadsOnly) {
+        const result = await postToThreads({ imagePaths: uploadPaths, caption: buildThreadsCaption(captionText, 'en', { prompt: false }) });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(result));
+        return;
+      }
       const igPostResult = await postToInstagram({
         imagePaths: uploadPaths,
         caption: captionText,
         headless: false,
-        shareToFacebook: doShareFB,
-        shareToThreads: !isFbOnly
+        shareToFacebook: doShareFB
       });
 
       const successMsg = doShareFB 
@@ -960,7 +969,7 @@ const server = http.createServer(async (req, res) => {
         : 'Đã đăng bài thành công lên Instagram!';
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: igPostResult.threadsWarning ? `${successMsg} ${igPostResult.threadsWarning}` : successMsg, threadsCrosspostEnabled: igPostResult.threadsCrosspostEnabled }));
+      res.end(JSON.stringify({ success: igPostResult.success, message: successMsg }));
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, error: err.message }));
@@ -1045,7 +1054,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const captionText = customCaption !== undefined ? customCaption : post.title;
+      const captionText = ensureCaptionHashtags(removeCaptionMentions(customCaption !== undefined ? customCaption : post.title), 'en', post.title);
       await postToTikTok({
         videoPath: targetVideo,
         caption: captionText,
@@ -1068,7 +1077,29 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && reqUrl.pathname === '/api/sheet-column') {
+    try {
+      const cells = await googleSheet.readColumn(readSettings(path.join(__dirname, '.setting')));
+      const rows = cells.map((value, index) => ({ row: index + 1, value: String(value) })).filter(item => item.value.trim());
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ rows }));
+    } catch (error) {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
   if (reqUrl.pathname === '/api/sheet-queue') {
+    if (THREADS_ONLY) {
+      res.writeHead(req.method === 'GET' ? 200 : 409, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(req.method === 'GET' ? {
+        threadsOnly: true, enabled: false, running: false, nextRunAt: null, items: [],
+        options: { autoPostIG: false, autoPostTikTok: false, autoPostFB: false, autoPostThreads: true, asReel: true, captionLang: 'vi', enableMoodQuote: false },
+        error: 'Đăng riêng lên Threads: dán link ở ô phía trên rồi bấm Bắt đầu. Hàng đợi của ứng dụng chính vẫn chạy riêng.'
+      } : { error: 'Phiên Threads riêng không chạy hàng đợi Google Sheets.' }));
+      return;
+    }
     try {
       let result;
       if (req.method === 'GET') result = sheetQueue.snapshot();
@@ -1086,7 +1117,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && reqUrl.pathname === '/api/run-pipeline') {
     let jobId = null;
     try {
-      const { url, autoPostIG, autoPostTikTok, autoPostFB, asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, jobId: requestJobId } = await readJsonBody(req);
+      const { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, jobId: requestJobId } = await readJsonBody(req);
+      if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB)) throw new Error('Phiên này chỉ đăng Threads.');
       jobId = requestJobId;
       setPipelineProgress(jobId, 'Đang đọc nội dung Kuaishou…');
       const cleanUrl = extractUrl(url);
@@ -1114,7 +1146,7 @@ const server = http.createServer(async (req, res) => {
       const post = extractMedia(postContainer, html);
       setPipelineProgress(jobId, 'Đang chuẩn bị caption và hashtag…');
       const generated = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, captionLang);
-      const finalCaption = (customCaption !== undefined && customCaption.trim() !== '') ? customCaption : generated.fullText;
+      const finalCaption = ensureCaptionHashtags(removeCaptionMentions((customCaption !== undefined && customCaption.trim() !== '') ? customCaption : generated.fullText), captionLang, post.title);
       const finalMoodQuoteVi = enableMoodQuote !== false 
         ? (moodQuote !== undefined && moodQuote.trim() !== '' ? cleanPureText(moodQuote) : (generated.moodQuoteVi || generated.moodQuote || '')) 
         : '';
@@ -1170,7 +1202,7 @@ const server = http.createServer(async (req, res) => {
         const tiktokReelPath = path.join(outputDir, 'tiktok_reel.mp4');
         const frameCacheDir = path.join(outputDir, `temp_frames_${Date.now()}`);
         const shouldRunIG = Boolean(autoPostIG || autoPostFB);
-        const shouldCreateCleanReel = asReel !== false && (shouldRunIG || !autoPostTikTok);
+        const shouldCreateCleanReel = asReel !== false && (shouldRunIG || autoPostThreads || !autoPostTikTok);
 
         try {
           if (localImagePaths.length > 0) {
@@ -1204,43 +1236,16 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // Step 3: Auto Post to IG / Facebook if enabled
-      let igResult = null;
-      const shouldRunIG = Boolean(autoPostIG || autoPostFB);
-      if (shouldRunIG) {
-        setPipelineProgress(jobId, 'Đang đăng lên Instagram và Facebook…');
-        console.log(`[Instagram] Bắt đầu đăng Instagram (Chia sẻ Facebook: ${autoPostFB ? 'BẬT' : 'TẮT'})...`);
-        igResult = await postToInstagram({
-          imagePaths: uploadPaths,
-          caption: finalCaption,
-          headless: false,
-          shareToFacebook: Boolean(autoPostFB),
-          shareToThreads: Boolean(autoPostIG)
-        });
-      }
+      const published = await publishPlatforms(
+        { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads },
+        { imagePaths: uploadPaths, videoPath: targetVideo, caption: finalCaption, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
+        { instagram: postToInstagram, tiktok: postToTikTok, threads: postToThreads },
+        message => setPipelineProgress(jobId, message)
+      );
 
-      // Step 4: Auto Post to TikTok if enabled
-      let tiktokResult = null;
-      if (autoPostTikTok && targetVideo) {
-        setPipelineProgress(jobId, 'Đang đăng lên TikTok…');
-        console.log('[TikTok] Bắt đầu đăng TikTok...');
-        tiktokResult = await postToTikTok({
-          videoPath: targetVideo,
-          caption: finalCaption,
-          headless: false
-        });
-      }
-
-      if ((shouldRunIG && !igResult?.success) || (autoPostTikTok && !tiktokResult?.success)) {
-        const errors = [];
-        if (shouldRunIG && !igResult?.success) errors.push(`Instagram/Facebook: ${igResult?.message || 'không đăng được'}`);
-        if (autoPostTikTok && !tiktokResult?.success) errors.push(`TikTok: ${tiktokResult?.message || 'không đăng được'}`);
-        throw new Error(errors.join('; '));
-      }
-
-      // Keep files for download-only runs and failures; completed posts do not need local copies.
+      // Keep media when Threads needs a retry, without reposting other platforms.
       let cleanedUp = false;
-      if ((shouldRunIG || autoPostTikTok) && (!shouldRunIG || igResult?.success) && (!autoPostTikTok || tiktokResult?.success)) {
+      if ((autoPostIG || autoPostFB || autoPostTikTok || autoPostThreads) && published.success) {
         try {
           removeDownloadDirectory(outputDir);
           cleanedUp = true;
@@ -1263,13 +1268,7 @@ const server = http.createServer(async (req, res) => {
         cleanedUp,
         isVideo: post.isVideo,
         count: post.isVideo ? 1 : post.images.length,
-        igPosted: Boolean(autoPostIG && igResult?.success),
-        fbPosted: Boolean(autoPostFB && igResult?.success),
-        threadsCrosspostEnabled: Boolean(igResult?.threadsCrosspostEnabled),
-        threadsWarning: igResult?.threadsWarning || null,
-        igMessage: igResult?.message || null,
-        tiktokPosted: Boolean(autoPostTikTok && tiktokResult?.success),
-        tiktokMessage: tiktokResult?.message || null
+        ...published
       }));
     } catch (err) {
       setPipelineProgress(jobId, `Lỗi: ${err.message}`);
@@ -1291,7 +1290,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  sheetQueue.start();
+  if (!THREADS_ONLY) sheetQueue.start();
   const url = `http://localhost:${PORT}`;
   console.log(`\n==================================================`);
   console.log(`Kuaishou Downloader UI đang chạy tại:`);
@@ -1299,7 +1298,12 @@ server.listen(PORT, () => {
   console.log(`==================================================\n`);
 
   // Auto open browser on Windows
-  exec(`start ${url}`);
+  if (!process.argv.includes('--no-browser')) exec(`start ${url}`);
+});
+
+server.on('error', error => {
+  console.error(error.code === 'EADDRINUSE' ? `Cổng ${PORT} đã có server đang chạy. Dừng server cũ trước hoặc dùng npm run ui:threads.` : error.message);
+  process.exitCode = 1;
 });
 
 process.on('uncaughtException', (err) => {
