@@ -261,3 +261,29 @@ test('repeated Start requests keep the existing interval and do not post again',
   assert.deepEqual(scheduled.map(item => item.delay), [1800000]);
   queue.stop();
 });
+
+test('runNextNow runs next link immediately skipping delay', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const settingsPath = path.join(dir, '.setting');
+  fs.writeFileSync(settingsPath, JSON.stringify({ intervalSeconds: 3600 }));
+  const cells = ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second'];
+  const calls = [];
+  const queue = createSheetQueue({
+    statePath: path.join(dir, 'state.json'), settingsPath,
+    sheet: { readColumn: async () => cells, clearCell: async (_, row) => { cells[row - 1] = ''; } },
+    runPipeline: async url => { calls.push(url); return { success: true }; },
+    schedule: (callback, delay) => { return { unref() {} }; }
+  });
+  queue.start();
+  queue.configure({ enabled: true, runNow: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['https://v.kuaishou.com/first']);
+
+  // Call runNextNow - should immediately execute the next link
+  queue.configure({ runNextNow: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second']);
+  queue.stop();
+});
+

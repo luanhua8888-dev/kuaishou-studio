@@ -165,7 +165,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
     snapshot, tick,
     start() { if (!started) { started = true; plan(); } },
     stop() { started = false; if (timer) clearTimeout(timer); timer = null; nextRunAt = null; },
-    configure({ enabled, options, runNow = false }) {
+    configure({ enabled, options, runNow = false, runNextNow = false }) {
       const wasEnabled = state.enabled;
       const startNow = enabled === true && !wasEnabled && runNow && !busy;
       if (typeof enabled === 'boolean') {
@@ -179,8 +179,19 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           if (['en', 'vi', 'both', 'raw'].includes(options[key])) state.options[key] = options[key];
         } else if (typeof options[key] === 'boolean') state.options[key] = options[key];
       }
+      if (runNextNow) {
+        if (busy) throw new Error('Hàng đợi đang xử lý một link khác, vui lòng đợi xong.');
+        state.enabled = true;
+        state.error = null;
+        if (['failed', 'interrupted', 'partial'].includes(state.items[String(state.cursor)]?.status)) {
+          state.items[String(state.cursor)].status = 'pending';
+        }
+        if (timer) { clearTimeout(timer); timer = null; }
+        nextRunAt = null;
+        started = true;
+      }
       save();
-      if (started && startNow) {
+      if (started && (startNow || runNextNow)) {
         if (timer) clearTimeout(timer);
         timer = null; nextRunAt = null;
         void tick().finally(plan);

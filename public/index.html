@@ -145,7 +145,7 @@
       </div>
       <div class="queue-footer">
         <div><div id="sheetStatus" aria-live="polite">Đang tải trạng thái…</div><div id="sheetCountdown" aria-live="off"></div></div>
-        <div class="queue-actions"><button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button><button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button></div>
+        <div class="queue-actions"><button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button><button id="btnRunNext" class="btn" type="button" title="Chạy ngay link tiếp theo trong Google Sheets mà không cần chờ">Chạy link tiếp theo</button><button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button></div>
       </div>
       <details class="direct-link"><summary>Đăng một link riêng</summary><input type="text" id="urlInput" class="url-input" aria-label="Đường link Kuaishou" placeholder="Dán link Kuaishou tại đây…" autocomplete="off"><p class="helper">Dán link rồi bấm “Đăng link này”. Để trống để dùng hàng đợi Google Sheets.</p></details>
     </section>
@@ -384,6 +384,12 @@
       sheetRunning = data.running;
       sheetNextRunAt = data.nextRunAt;
       document.getElementById('btnPauseQueue').hidden = !sheetEnabled || threadsOnlyMode;
+      const btnRunNext = document.getElementById('btnRunNext');
+      if (btnRunNext) {
+        btnRunNext.hidden = threadsOnlyMode;
+        btnRunNext.disabled = sheetRunning;
+        btnRunNext.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy link tiếp theo';
+      }
       moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
       updateSwitchUI();
       updateSheetCountdown();
@@ -647,6 +653,28 @@
         showStatus('Đã tạm dừng hàng đợi. Lượt đang xử lý sẽ hoàn tất trước khi dừng.', 'success');
       } catch (error) { showStatus(error.message, 'error'); }
       finally { button.disabled = false; }
+    });
+
+    const btnRunNext = document.getElementById('btnRunNext');
+    btnRunNext.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (threadsOnlyMode) return;
+      button.disabled = true;
+      button.textContent = 'Đang kích hoạt…';
+      try {
+        const response = await fetch('/api/sheet-queue', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runNextNow: true, options: sheetOptions() })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Không thể chạy link tiếp theo');
+        renderSheetQueue(data);
+        showStatus('Đang quét và chạy ngay link tiếp theo từ bảng Google Sheets...', 'loading');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally {
+        button.disabled = sheetRunning;
+        button.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy link tiếp theo';
+      }
     });
 
     // 1-Click Run Pipeline

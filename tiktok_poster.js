@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { removeCaptionMentions } from './caption-text.js';
+import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -109,6 +110,8 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
   if (!videoPath || !fs.existsSync(videoPath)) {
     throw new Error(`Không tìm thấy file video để đăng lên TikTok: ${videoPath}`);
   }
+
+  videoPath = await sanitizeVideoAudioForCopyright(videoPath);
 
   if (!fs.existsSync(AUTH_FILE)) {
     throw new Error('Chưa đăng nhập TikTok! Vui lòng bấm vào nút "TikTok: Bấm để đăng nhập" trên giao diện trước.');

@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { removeCaptionMentions } from './caption-text.js';
+import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
@@ -152,7 +153,8 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     const isVideo = ext === '.mp4' || ext === '.mov';
 
     if (isVideo) {
-      sanitizedUploadPaths.push(p);
+      const safeVideoPath = await sanitizeVideoAudioForCopyright(p);
+      sanitizedUploadPaths.push(safeVideoPath);
       continue;
     }
 

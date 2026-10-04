@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { removeCaptionMentions } from './caption-text.js';
 import { threadsTopic } from './threads-caption.js';
+import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 export const AUTH_FILE = path.join(root, 'threads_auth.json');
@@ -81,6 +82,16 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
   if (!imagePaths?.length || imagePaths.some(file => !fs.existsSync(file))) {
     throw new Error('Không tìm thấy ảnh/video để đăng Threads.');
   }
+
+  const uploadPaths = [];
+  for (const p of imagePaths) {
+    const ext = path.extname(p).toLowerCase();
+    if (ext === '.mp4' || ext === '.mov') {
+      uploadPaths.push(await sanitizeVideoAudioForCopyright(p));
+    } else {
+      uploadPaths.push(p);
+    }
+  }
   if (!await checkLoginStatus()) throw new Error('Chưa đăng nhập Threads. Bấm nút Threads trên giao diện để đăng nhập.');
   const browser = await chromium.launch({ headless });
   try {
@@ -122,7 +133,7 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
         await dialog.getByRole('button', { name: /Attach media|Add photos|Đính kèm|Thêm ảnh/i }).first().click();
         input = page.locator('input[type="file"]').last();
       }
-      await input.setInputFiles(imagePaths);
+      await input.setInputFiles(uploadPaths);
       // Do not submit a text-only post when media upload fails.
       await dialog.locator('video, img[src^="blob:"], button[aria-label*="Remove"], [role="button"][aria-label*="Remove"], button[aria-label*="Xóa"]').first()
         .waitFor({ state: 'visible', timeout: 90000 });
