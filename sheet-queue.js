@@ -113,9 +113,13 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         try {
           const requested = { ...state.options };
           for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted']]) {
-            if (entry.published?.[flag]) requested[option] = false;
+            const platform = { igPosted: 'instagram', fbPosted: 'facebook', tiktokPosted: 'tiktok', threadsPosted: 'threads' }[flag];
+            if (entry.published?.[flag] || entry.skippedPlatforms?.includes(platform)) requested[option] = false;
           }
           const result = await runPipeline(url, requested);
+          entry.skippedPlatforms = [...new Set([...(entry.skippedPlatforms || []), ...(result.skippedPlatforms || [])])];
+          entry.skipWarning = result.skipWarning || entry.skipWarning || null;
+          entry.warning = [entry.skipWarning, result.threadsWarning].filter(Boolean).join(' ') || null;
           entry.published = { ...entry.published };
           for (const flag of ['igPosted', 'fbPosted', 'tiktokPosted', 'threadsPosted']) {
             entry.published[flag] = Boolean(entry.published[flag] || result[flag]);
@@ -131,9 +135,16 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           }
           if (!result.success) throw new Error(result.error || 'Quy trình thất bại');
           entry.status = 'awaiting_clear'; entry.error = null;
-          entry.warning = result.threadsWarning || null;
           entry.updatedAt = new Date().toISOString(); save();
         } catch (error) {
+          if (error.code === 'NETWORK_READ_FAILED' || /fetch failed|Không tải được|ECONN|ETIMEDOUT|socket|aborted/i.test(error.message)) {
+            entry.status = 'partial'; entry.error = error.message;
+            entry.updatedAt = new Date().toISOString();
+            state.enabled = false;
+            state.error = `Dòng ${row}: ${entry.error}. Link được giữ lại; kiểm tra trạng thái đăng trước khi thử lại.`;
+            save();
+            return;
+          }
           entry.status = 'failed_awaiting_clear'; entry.error = error.message;
           entry.updatedAt = new Date().toISOString();
           state.error = `Dòng ${row}: ${entry.error}`;

@@ -1,0 +1,15 @@
+{
+  "durationSeconds": 14,
+  "secondsPerImage": 2.6,
+  "transitionSeconds": 0.3,
+  "zoomAmount": 0.035,
+  "text": {
+    "fontSize": 44,
+    "positionY": 0.68,
+    "marginLeft": 200,
+    "marginRight": 200,
+    "marginTop": 180,
+    "marginBottom": 420
+  },
+  "audio": { "volume": 0.3, "fadeSeconds": 0.5 }
+}

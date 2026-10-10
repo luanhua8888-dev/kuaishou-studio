@@ -1,3 +1,5 @@
+import { UPLOAD_INPUT_UNAVAILABLE } from './instagram-upload.js';
+
 // Attempt each selected destination even if another destination fails.
 export async function publishPlatforms(options, media, posters, progress = () => {}) {
   const result = { igPosted: false, fbPosted: false, tiktokPosted: false, threadsPosted: false, errors: [] };
@@ -9,13 +11,19 @@ export async function publishPlatforms(options, media, posters, progress = () =>
       result.igPosted = Boolean(options.autoPostIG);
       result.fbPosted = Boolean(options.autoPostFB && posted.facebookShared);
       if (options.autoPostFB && !posted.facebookShared) result.errors.push('Facebook: chưa xác nhận bật chia sẻ từ Instagram');
-    } catch (error) { result.errors.push(`Instagram/Facebook: ${error.message}`); }
+    } catch (error) {
+      if (error.code === UPLOAD_INPUT_UNAVAILABLE) {
+        result.skippedPlatforms = [options.autoPostIG && 'instagram', options.autoPostFB && 'facebook'].filter(Boolean);
+        result.skipWarning = error.message;
+        progress(error.message);
+      } else result.errors.push(`Instagram/Facebook: ${error.message}`);
+    }
   }
   if (options.autoPostTikTok) {
     progress('Đang đăng lên TikTok…');
     try {
       if (!media.videoPath) throw new Error('Không có video để đăng');
-      const posted = await posters.tiktok({ videoPath: media.videoPath, caption: media.caption, headless: false });
+      const posted = await posters.tiktok({ videoPath: media.videoPath, caption: media.caption, headless: false, onProgress: progress });
       if (!posted?.success) throw new Error(posted?.message || 'Chưa xác nhận đăng thành công');
       result.tiktokPosted = true;
     } catch (error) { result.errors.push(`TikTok: ${error.message}`); }

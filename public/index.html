@@ -16,12 +16,13 @@
     :focus-visible { outline:3px solid #91b5df; outline-offset:4px; }
     .container { width:100%; margin:auto; }
     header { margin-bottom:24px; }
-    .workspace { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr); gap:20px; align-items:start; }
-    .controls-column { min-width:0; }
-    .controls-column .card { padding:20px; margin-bottom:14px; }
-    .controls-column .queue-footer { gap:14px; }
+    .workspace { display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
+    .controls-column { min-width:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:stretch; }
+    .controls-column .card { min-width:0; padding:20px; margin-bottom:0; }
+    .controls-column .advanced { grid-column:1 / -1; }
+    .controls-column .queue-footer { gap:14px; flex-direction:column; align-items:stretch; }
     .controls-column .queue-actions .btn { flex:1; }
-    .controls-column .switches-container { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .controls-column .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .controls-column .section-heading .muted { display:none; }
     .controls-column .settings-grid { grid-template-columns:1fr; gap:16px; }
     .card.sheet-panel { min-width:0; padding:0; overflow:hidden; margin-bottom:0; }
@@ -36,14 +37,27 @@
     .sheet-table th:first-child { width:64px; }
     .sheet-table td:first-child { color:var(--text-muted); font-variant-numeric:tabular-nums; }
     .sheet-table td:last-child { overflow-wrap:anywhere; }
+    .sheet-table tr.sheet-row-error td { background:#fff1f1; color:#a33838; border-bottom-color:#efd8d8; }
+    .sheet-table tr.sheet-row-error a { color:#a33838; }
+    .sheet-row-error-message { margin-top:6px; font-size:11px; line-height:1.5; color:#a33838; }
     .sheet-list-message { padding:24px 16px; color:var(--text-muted); font-size:12px; }
     .sheet-panel-note { padding:10px 22px; border-top:1px solid var(--card-border); font-size:11px; color:var(--text-muted); }
+    .sheet-reminder { position:fixed; right:24px; bottom:24px; z-index:1000; width:min(390px,calc(100vw - 32px)); display:flex; gap:12px; padding:18px; border:1px solid #ecd49a; border-radius:12px; background:#fffbeb; color:#785516; box-shadow:0 8px 32px #20252b24; }
+    .sheet-reminder strong { display:block; margin-bottom:4px; font-size:14px; }
+    .sheet-reminder p,.sheet-reminder a { font-size:12px; }
+    .sheet-reminder a { display:inline-block; margin-top:8px; color:inherit; font-weight:600; }
+    .sheet-reminder-close { align-self:flex-start; border:0; background:transparent; color:inherit; cursor:pointer; font-size:22px; line-height:1; padding:2px 4px; }
     @media(max-width:1200px) { .controls-column .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); } .controls-column .queue-footer { flex-direction:column; align-items:stretch; } }
     @media(max-width:1000px) { .workspace { grid-template-columns:1fr; } .controls-column { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; } .controls-column .card { margin-bottom:0; } .controls-column .advanced { grid-column:1 / -1; } }
     .header-top,.section-heading,.sheet-top,.queue-footer,.platform-top,.post-header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
     .logo-badge { font-size:11px; font-weight:700; letter-spacing:2px; color:var(--text-muted); }
     .header-note { font-size:12px; color:var(--text-muted); }
     h1 { font-size:30px; letter-spacing:-1px; line-height:1.25; margin:20px 0 8px; font-weight:700; }
+    .title-row { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .title-countdown { display:flex; flex-direction:column; align-items:flex-end; margin:12px 0 4px; }
+    #titleCountdownValue { font-size:clamp(40px,5vw,64px); font-weight:800; line-height:1.1; letter-spacing:-2px; font-variant-numeric:tabular-nums; color:#356948; }
+    #titleCountdownLabel { font-size:12px; color:var(--text-muted); margin-top:4px; }
+    .title-countdown[data-state="paused"] #titleCountdownValue { color:var(--text-muted); }
     .subtitle { margin:0; color:var(--text-muted); }
     h2 { font-size:15px; font-weight:700; margin:0; }
     p { margin:0; }
@@ -132,7 +146,12 @@
   <div class="container">
     <header>
       <div class="header-top"><div class="logo-badge">KUAISHOU STUDIO</div><span class="header-note">Một nơi quản lý · Bốn nền tảng</span></div>
-      <h1>Đăng nội dung, đơn giản hơn.</h1>
+      <div class="title-row">
+        <h1>Đăng nội dung, đơn giản hơn.</h1>
+        <div id="titleCountdown" class="title-countdown" data-state="paused" aria-label="Trạng thái hàng đợi">
+          <span id="titleCountdownValue">—</span><span id="titleCountdownLabel">Đang tải trạng thái…</span>
+        </div>
+      </div>
       <p class="subtitle">Thêm link vào bảng. Chọn nơi đăng. Công cụ xử lý phần còn lại.</p>
     </header>
     <main class="workspace">
@@ -181,7 +200,7 @@
         <div><label for="captionLangSelect" class="setting-label">Ngôn ngữ mô tả</label><select id="captionLangSelect"><option value="en" selected>Tiếng Anh</option><option value="vi">Tiếng Việt</option><option value="both">Anh + Việt</option><option value="raw">Tiếng Trung gốc</option></select></div>
         <div><label class="check-field"><input type="checkbox" id="chkAsReel" checked><span>Tạo video dọc từ bộ ảnh<br><span class="helper">Tỷ lệ 9:16, chuyển cảnh và ghép nhạc.</span></span></label></div>
       </div>
-      <div class="overlay-settings"><label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn chữ lên video TikTok</span></label><p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video.</p><div id="moodTextContainer"><label for="moodTextInput" class="field-label">Nội dung chèn · để trống để tạo tự động</label><input type="text" id="moodTextInput" class="url-input" placeholder="Nhập câu chữ của bạn…"></div></div>
+      <div class="overlay-settings"><label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn câu chuyện lên video TikTok</span></label><p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video. Hàng đợi dùng câu chuyện trong cấu hình đã lưu.</p><div id="moodTextContainer"><label for="moodTextInput" class="field-label">Mỗi dòng một câu · để trống dùng câu chuyện mặc định</label><textarea id="moodTextInput" class="url-input" rows="4" placeholder="Nếu được đi trốn một ngày, mình muốn đến đây.&#10;Giữa thiên nhiên, mọi thứ như chậm lại…"></textarea></div></div>
       <p class="help-note">Mỗi mô tả có 5 hashtag và tự loại bỏ @. Threads có thêm một chủ đề phù hợp. Khả năng được đề xuất còn phụ thuộc nội dung và trạng thái tài khoản.</p>
     </details>
     </div>
@@ -287,12 +306,58 @@
     <footer>Kuaishou Studio · Mô tả không có @</footer>
   </div>
 
+  <aside id="sheetReminder" class="sheet-reminder" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <div><strong>Sắp hết link trong bảng</strong><p id="sheetReminderText"></p><a href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Thêm link vào bảng ↗</a></div>
+    <button type="button" id="btnDismissSheetReminder" class="sheet-reminder-close" aria-label="Đóng nhắc nhở">×</button>
+  </aside>
   <script>
     const urlInput = document.getElementById('urlInput');
     const btnRun = document.getElementById('btnRun');
     const sheetStatus = document.getElementById('sheetStatus');
     const sheetCountdown = document.getElementById('sheetCountdown');
     let loadingSheetColumn = false;
+    let sheetQueueItems = [];
+    function updateSheetRowErrors() {
+      const failures = new Map(sheetQueueItems
+        .filter(item => ['partial', 'failed', 'failed_awaiting_clear', 'interrupted'].includes(item.status))
+        .map(item => [String(item.row), item]));
+      for (const row of document.querySelectorAll('#sheetRows tr')) {
+        const failure = failures.get(row.dataset.row);
+        const value = row.dataset.value || '';
+        const link = value.match(/https?:\/\/[^\s"<>]+/i)?.[0]?.replace(/[),.;]+$/, '');
+        const hasError = Boolean(failure && (value.trim() === failure.url || link === failure.url));
+        row.classList.toggle('sheet-row-error', hasError);
+        let message = row.querySelector('.sheet-row-error-message');
+        if (hasError) {
+          if (!message) {
+            message = document.createElement('p');
+            message.className = 'sheet-row-error-message';
+            row.lastElementChild.appendChild(message);
+          }
+          const text = `Lỗi: ${failure.error || 'Chưa hoàn tất xử lý dòng này.'}`;
+          if (message.textContent !== text) message.textContent = text;
+        } else { message?.remove(); }
+      }
+    }
+    let sheetReminderDismissed = false;
+    function updateSheetReminder(count) {
+      const reminder = document.getElementById('sheetReminder');
+      if (count >= 50) {
+        sheetReminderDismissed = false;
+        reminder.hidden = true;
+        return;
+      }
+      const message = count === 0
+        ? 'Bảng đã hết link. Thêm link mới để tiếp tục đăng bài.'
+        : `Chỉ còn ${count} dòng có nội dung trong cột A (dưới 50). Thêm link để hàng đợi tiếp tục chạy.`;
+      const text = document.getElementById('sheetReminderText');
+      if (text.textContent !== message) text.textContent = message;
+      reminder.hidden = sheetReminderDismissed;
+    }
+    document.getElementById('btnDismissSheetReminder').addEventListener('click', () => {
+      sheetReminderDismissed = true;
+      document.getElementById('sheetReminder').hidden = true;
+    });
     async function refreshSheetColumn() {
       if (loadingSheetColumn) return;
       loadingSheetColumn = true;
@@ -307,6 +372,8 @@
         rows.replaceChildren();
         for (const item of data.rows) {
           const row = document.createElement('tr');
+          row.dataset.row = String(item.row);
+          row.dataset.value = item.value;
           const number = document.createElement('td');
           number.textContent = item.row;
           const cell = document.createElement('td');
@@ -323,7 +390,9 @@
           row.append(number, cell);
           rows.appendChild(row);
         }
+        updateSheetRowErrors();
         document.getElementById('sheetRowCount').textContent = `${data.rows.length} dòng có nội dung · Google Sheets`;
+        updateSheetReminder(data.rows.length);
         document.getElementById('sheetTable').hidden = data.rows.length === 0;
         message.hidden = data.rows.length > 0;
         message.textContent = 'Cột A đang trống. Mở bảng để thêm link.';
@@ -339,16 +408,49 @@
     let sheetSettingsLoaded = false;
     let sheetNextRunAt = null;
     let sheetRunning = false;
+    let sheetStage = null;
+    let sheetStageStartedAt = null;
     let threadsOnlyMode = false;
 
     function updateSheetCountdown() {
-      if (!sheetEnabled) { sheetCountdown.textContent = ''; return; }
-      if (sheetRunning) { sheetCountdown.textContent = 'Đang xử lý lượt hiện tại…'; return; }
-      if (!sheetNextRunAt) { sheetCountdown.textContent = 'Đang chuẩn bị lượt tiếp theo…'; return; }
+      const clock = document.getElementById('titleCountdown');
+      const value = document.getElementById('titleCountdownValue');
+      const label = document.getElementById('titleCountdownLabel');
+      const formatTime = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      if (!sheetEnabled && !sheetRunning) {
+        sheetCountdown.textContent = '';
+        clock.dataset.state = 'paused';
+        value.textContent = '—';
+        label.textContent = 'Đã tạm dừng';
+        document.title = 'Tạm dừng · Kuaishou Studio';
+        return;
+      }
+      if (sheetRunning) {
+        const startedAt = typeof sheetStageStartedAt === 'number' ? sheetStageStartedAt : Date.parse(sheetStageStartedAt);
+        const seconds = Number.isFinite(startedAt) ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
+        sheetCountdown.textContent = `${sheetStage || 'Đang xử lý lượt hiện tại…'}${seconds === null ? '' : ` · ${Math.floor(seconds / 60)} phút ${seconds % 60} giây`}`;
+        clock.dataset.state = 'running';
+        value.textContent = seconds === null ? '…' : formatTime(seconds);
+        label.textContent = 'Đang xử lý · Thời gian đã chạy';
+        document.title = `Đang xử lý${seconds === null ? '' : ` ${formatTime(seconds)}`} · Kuaishou Studio`;
+        return;
+      }
+      if (!sheetNextRunAt || !Number.isFinite(Date.parse(sheetNextRunAt))) {
+        sheetCountdown.textContent = 'Đang chuẩn bị lượt tiếp theo…';
+        clock.dataset.state = 'waiting';
+        value.textContent = '…';
+        label.textContent = 'Đang chuẩn bị lượt tiếp theo';
+        document.title = 'Đang chuẩn bị · Kuaishou Studio';
+        return;
+      }
       const remaining = Math.max(0, Math.ceil((Date.parse(sheetNextRunAt) - Date.now()) / 1000));
       const minutes = Math.floor(remaining / 60);
       const seconds = remaining % 60;
       sheetCountdown.textContent = `Lượt tiếp theo sau ${minutes} phút ${String(seconds).padStart(2, '0')} giây`;
+      clock.dataset.state = 'waiting';
+      value.textContent = formatTime(remaining);
+      label.textContent = 'Đếm ngược tới lượt tiếp theo';
+      document.title = `${formatTime(remaining)} · Lượt tiếp theo · Kuaishou Studio`;
     }
 
     function sheetOptions() {
@@ -364,7 +466,18 @@
     }
 
     function renderSheetQueue(data) {
+      if (Array.isArray(data.items)) {
+        sheetQueueItems = data.items;
+        updateSheetRowErrors();
+      }
       threadsOnlyMode = Boolean(data.threadsOnly);
+      if (data.tiktokOnly) {
+        [swCardIG, swCardFB, swCardThreads].forEach(card => { card.style.display = 'none'; });
+        ['btnManualPostIG', 'btnManualPostFB', 'btnManualPostThreads'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+        [chkAutoPostIG, chkAutoPostFB, chkAutoPostThreads].forEach(input => { input.checked = false; input.disabled = true; });
+        chkAutoPostTikTok.checked = true;
+        chkAutoPostTikTok.disabled = true;
+      }
       if (threadsOnlyMode) {
         [swCardIG, swCardTikTok, swCardFB].forEach(card => { card.style.display = 'none'; });
         ['btnManualPostIG', 'btnManualPostTikTok', 'btnManualPostFB'].forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -382,6 +495,8 @@
       }
       sheetEnabled = data.enabled;
       sheetRunning = data.running;
+      sheetStage = data.stage;
+      sheetStageStartedAt = data.stageStartedAt;
       sheetNextRunAt = data.nextRunAt;
       document.getElementById('btnPauseQueue').hidden = !sheetEnabled || threadsOnlyMode;
       const btnRunNext = document.getElementById('btnRunNext');
@@ -393,10 +508,10 @@
       moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
       updateSwitchUI();
       updateSheetCountdown();
-      const latestThreadsWarning = data.items?.find(item => item.warning)?.warning;
+      const latestWarning = data.items?.find(item => item.warning)?.warning;
       sheetStatus.textContent = data.connectionError
         || data.error
-        || `${data.enabled ? `Đang chạy · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng'}${latestThreadsWarning ? ` · Threads: ${latestThreadsWarning}` : ''}`;
+        || `${data.enabled ? `Đang chạy · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng'}${latestWarning ? ` · ${latestWarning}` : ''}`;
     }
 
     async function refreshSheetQueue() {
@@ -775,7 +890,7 @@
             captionLang: captionLangSelect.value,
             jobId,
             enableMoodQuote: chkAddMoodText.checked,
-            moodQuote: moodTextInput.value.trim()
+            slideshowConfig: moodTextInput.value.trim() ? { sceneTexts: moodTextInput.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean) } : undefined
           })
         });
 
@@ -806,6 +921,7 @@
           successMsg += ` Đã lưu vào: ${data.downloadPath}`;
         }
         if (data.threadsWarning) successMsg += ` Threads: ${data.threadsWarning}`;
+        if (data.skipWarning) successMsg += ` ${data.skipWarning}`;
         showStatus(successMsg, data.threadsWarning ? 'error' : 'success');
 
         btnOpenFolder.style.display = data.downloadPath ? 'inline-flex' : 'none';
@@ -847,9 +963,6 @@
         const data = await res.json();
         if (data.success && data.fullText) {
           captionDisplay.value = data.fullText;
-          if (data.moodQuoteVi || data.moodQuote) {
-            moodTextInput.value = data.moodQuoteVi || data.moodQuote;
-          }
         }
       } catch {}
     });
@@ -859,9 +972,6 @@
       authorName.textContent = post.author || 'Người dùng Kuaishou';
       postTitle.textContent = post.title || 'Không có tiêu đề';
       captionDisplay.value = data.caption || '';
-      if (data.moodQuoteVi || data.moodQuote || post.moodQuoteVi || post.moodQuote) {
-        moodTextInput.value = data.moodQuoteVi || data.moodQuote || post.moodQuoteVi || post.moodQuote || '';
-      }
 
       if (post.isVideo) {
         imageCountBadge.textContent = 'Video gốc';
@@ -1004,6 +1114,7 @@
               moodQuoteVi: moodTextInput.value.trim(),
               enableMoodQuote: chkAddMoodText.checked
             },
+            slideshowConfig: moodTextInput.value.trim() ? { sceneTexts: moodTextInput.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean) } : undefined,
             customCaption: captionDisplay.value
           })
         });

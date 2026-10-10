@@ -1,5 +1,7 @@
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 
+import { networkRead } from './network-read.js';
+
 export function parseInitState(html) {
   const match = html.match(/window\.INIT_STATE\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/i);
   if (!match) return null;
@@ -30,9 +32,8 @@ export async function getPostPage(shareUrl, fetchImpl = fetch) {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
   };
   const request = async url => {
-    const response = await fetchImpl(url, { method: 'GET', redirect: 'follow', headers });
-    if (!response.ok) throw new Error(`Kuaishou trả về HTTP ${response.status}`);
-    const html = await response.text();
+    const response = await networkRead(url, { headers, fetchImpl });
+    const html = response.data;
     return { finalUrl: response.url, html, initState: parseInitState(html) };
   };
 

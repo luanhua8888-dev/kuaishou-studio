@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
+import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './tiktok-upload.js';
 import { removeCaptionMentions } from './caption-text.js';
-import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -106,12 +106,11 @@ export async function interactiveLogin() {
 /**
  * Automatically post a video to TikTok via TikTok Studio / Creator Upload
  */
-export async function postToTikTok({ videoPath, caption, headless = false }) {
+export async function postToTikTok({ videoPath, caption, headless = false, onProgress = () => {} }) {
   if (!videoPath || !fs.existsSync(videoPath)) {
     throw new Error(`Không tìm thấy file video để đăng lên TikTok: ${videoPath}`);
   }
 
-  videoPath = await sanitizeVideoAudioForCopyright(videoPath);
 
   if (!fs.existsSync(AUTH_FILE)) {
     throw new Error('Chưa đăng nhập TikTok! Vui lòng bấm vào nút "TikTok: Bấm để đăng nhập" trên giao diện trước.');
@@ -136,9 +135,9 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
   const page = await context.newPage();
 
   try {
+    onProgress('TikTok: đang mở trang tải video…');
     console.log('[TikTok] Đang truy cập TikTok Studio Upload...');
     await page.goto('https://www.tiktok.com/tiktokstudio/upload?lang=vi-VN', { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(4000);
 
     // Check if session expired
     if (page.url().includes('/login')) {
@@ -157,86 +156,36 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
 
     // 1. Upload video file via input[type="file"]
     console.log('[TikTok] Đang tải video lên TikTok...');
-    let fileInput = page.locator('input[type="file"]').first();
-    let foundInput = false;
-
-    if (await fileInput.count() > 0) {
-      foundInput = true;
-    } else {
-      // Check if inside an iframe
-      for (const frame of page.frames()) {
-        const fInput = frame.locator('input[type="file"]').first();
-        if (await fInput.count() > 0) {
-          fileInput = fInput;
-          foundInput = true;
-          break;
-        }
-      }
-    }
-
-    if (!foundInput) {
-      await fileInput.waitFor({ state: 'attached', timeout: 25000 });
-    }
+    const fileInput = await waitForTikTokUpload(page);
 
     await fileInput.setInputFiles(videoPath);
+    onProgress('TikTok: đang tải và xử lý video…');
     console.log('Đã đưa file video vào hệ thống tải lên!');
-    await page.waitForTimeout(5000);
-
-    // 2. Fill Caption
-    if (caption) {
-      console.log('[TikTok] Đang nhập Caption vào TikTok...');
-      const captionSelectors = [
-        'div[contenteditable="true"]',
-        'div[data-e2e="caption-input"]',
-        'div[role="combobox"]',
-        'div.DraftEditor-root div[contenteditable="true"]'
-      ];
-
-      let captionBox = null;
-      for (const sel of captionSelectors) {
-        const el = page.locator(sel).first();
-        if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
-          captionBox = el;
-          break;
-        }
-      }
-
-      if (captionBox) {
-        await captionBox.click({ force: true });
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.waitForTimeout(500);
-        await page.keyboard.insertText(removeCaptionMentions(caption));
-        await page.waitForTimeout(1500);
-      }
-    }
 
     // 3. Wait for video upload to finish and Post button to be enabled
     console.log('[TikTok] Đang đợi TikTok xử lý video hoàn tất...');
-    const postBtn = page.locator('button').filter({ hasText: /^(Post|Đăng)$/ }).last();
-    await postBtn.waitFor({ state: 'attached', timeout: 35000 });
-    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-
-    // Wait until Post button is enabled (video upload 100%)
-    for (let i = 0; i < 60; i++) {
-      await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-      const isDisabled = await postBtn.evaluate(el => el.disabled || el.getAttribute('aria-disabled') === 'true').catch(() => true);
-      if (!isDisabled) {
-        console.log('Video đã tải lên xong và sẵn sàng để Đăng!');
-        break;
-      }
-      await page.waitForTimeout(1500);
-    }
+    await waitForTikTokPostButton(page);
+    console.log('Video đã tải lên xong và sẵn sàng để Đăng!');
 
     // 4. Click Post
     // Upload completion is separate from the copyright/content scans.
-    if (/Đang kiểm tra\.|Checking[.…]/i.test(await page.locator('body').innerText())) {
-      console.log('[TikTok] Đang chờ kiểm tra bản quyền/nội dung hoàn tất trước khi đăng...');
-      await page.waitForFunction(() => !/Đang kiểm tra\.|Checking[.…]/i.test(document.body.innerText), null, { timeout: 660000 });
+    console.log('[TikTok] Đang chờ kiểm tra bản quyền/nội dung hoàn tất trước khi đăng...');
+    const checks = await waitForTikTokChecks(page, { onProgress });
+    if (checks.checksPending) console.log('[TikTok] Kiểm tra vẫn đang chạy sau 3 phút; tiếp tục đăng theo cấu hình.');
+    // TikTok can replace/reset its editor while loading the uploaded video.
+    if (caption) {
+      onProgress('TikTok: đang nhập và kiểm tra mô tả/hashtag…');
+      await fillTikTokCaption(page, removeCaptionMentions(caption));
     }
     console.log('[TikTok] Đang bấm Đăng (Post) lên TikTok...');
-    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-    await postBtn.click({ force: true });
+    onProgress('TikTok: đang đăng và chờ xác nhận…');
+    // Reacquire after scans: TikTok can replace the button or navigate away.
+    const postBtn = await waitForTikTokPostButton(page);
+    try {
+      await postBtn.click({ timeout: 5000 });
+    } catch {
+      throw new Error('Không xác nhận được thao tác bấm Đăng trên TikTok. Hãy kiểm tra bài gần đây trong TikTok Studio trước khi thử lại để tránh đăng trùng.');
+    }
     await page.waitForTimeout(2000);
 
     // A visible Post button can remain during processing; clicking twice risks duplicate posts.
@@ -295,14 +244,13 @@ export async function postToTikTok({ videoPath, caption, headless = false }) {
 
     console.log('[TikTok] Đăng video lên TikTok hoàn tất!');
     await context.storageState({ path: AUTH_FILE });
-    await page.waitForTimeout(3000);
     await browser.close();
 
     return { success: true, message: 'Đăng video lên TikTok thành công!' };
   } catch (err) {
     console.error('[TikTok] Lỗi đăng bài TikTok:', err.message);
     try {
-      await page.screenshot({ path: path.join(__dirname, 'tiktok_error.png') });
+      await page.screenshot({ path: path.join(__dirname, 'tiktok_error.png'), fullPage: true });
     } catch {}
     await browser.close();
     throw err;

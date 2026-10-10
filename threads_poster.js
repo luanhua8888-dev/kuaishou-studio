@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { removeCaptionMentions } from './caption-text.js';
 import { threadsTopic } from './threads-caption.js';
 import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
+import { confirmThreadsPost } from './threads-confirmation.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 export const AUTH_FILE = path.join(root, 'threads_auth.json');
@@ -149,15 +150,15 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
         await page.screenshot({ path: path.join(root, 'artifacts', 'threads-caption-preflight.png') });
         return { prepared: true, caption: composed, topicAttached, topic };
       }
-      await post.click();
-      // Closing the composer alone does not prove the post was published.
-      await page.getByText(/^(Posted|Your thread was posted|Thread posted|Đã đăng|Đã đăng bài viết)(\.|!)?$/i).first()
-        .waitFor({ state: 'visible', timeout: 90000 });
+      // Keep the browser open while uploads finish, and observe before clicking.
+      await confirmThreadsPost(page, () => post.click());
       await context.storageState({ path: AUTH_FILE });
       return { success: true, topicAttached, topic, message: 'Đã đăng trực tiếp lên Threads.' };
     } catch (error) {
       await page.screenshot({ path: path.join(root, 'threads_error.png') }).catch(() => {});
-      throw new Error(`Threads: ${error.message}. Kiểm tra tài khoản trước khi thử lại để tránh đăng trùng.`);
+      const message = error.message.replace(/\u001b\[[0-9;]*m/g, '');
+      throw new Error(message.includes('tránh đăng trùng') ? message
+        : `${message}. Kiểm tra tài khoản trước khi thử lại để tránh đăng trùng.`);
     }
   } finally { await browser.close(); }
 }

@@ -1,5 +1,39 @@
 # Kuaishou Media Downloader & Multi-Platform Poster (No Watermark)
 
+## Slideshow phong cảnh — đăng riêng TikTok
+
+Chạy `npm run ui:tiktok`, mở `http://localhost:3003`. Phiên này chỉ cho phép đăng TikTok, có trạng thái hàng đợi riêng và chặn các API đăng Instagram/Facebook/Threads. Hàng đợi chỉ chạy khi bạn bật Bắt đầu; phiên đa nền tảng đang chạy ở cổng khác vẫn hoạt động độc lập.
+
+Bộ dựng TikTok dùng Node.js + FFmpeg hiện có: H.264 1080×1920, SAR 1:1, 30 fps; mặc định 14 giây, khoảng 6 ảnh khi đủ nguồn, dissolve 0,3 giây. Ảnh chính được fit trọn vẹn lên nền mờ; zoom 3,5% nằm trong khoảng đệm, giữ chủ thể ở mép ảnh. Chữ được chèn sau chuyển cảnh để không bị zoom hay chồng hai câu. TikTok không còn đi qua bước đổi cao độ âm thanh.
+
+Chỉnh `tiktok-slideshow.config.json` rồi chạy lượt mới (không cần khởi động lại để đọc cấu hình dựng):
+
+| Thuộc tính | Cách dùng |
+| --- | --- |
+| `durationSeconds` | Tổng thời lượng, gồm cả phần chồng chuyển cảnh; mặc định 14 giây |
+| `secondsPerImage` | Nhịp mục tiêu 2,6 giây để chọn số ảnh; ít ảnh thì thời lượng mỗi cảnh dài hơn |
+| `sceneCount` | Tuỳ chọn ép số cảnh; không lặp ảnh khi thiếu nguồn |
+| `heroImageIndex` | Chọn ảnh nổi bật đưa lên đầu, đếm từ 0 theo thứ tự ảnh nguồn; bỏ qua thì ưu tiên ảnh nhiều pixel nhất, chỉ là lựa chọn sơ bộ |
+| `imageOrder` | Tuỳ chọn chọn và sắp thứ tự ảnh bằng mảng chỉ số, không trùng; nếu không chỉ định hero thì ảnh đầu mảng là ảnh mở đầu |
+| `sceneTexts` | Mảng câu theo thứ tự xuất hiện sau khi đổi ảnh mở đầu; cùng số cảnh thì một câu mỗi cảnh. Ít câu hơn cảnh thì giữ câu qua các cảnh liền nhau, không vẽ lại trên mỗi ảnh. `[]` để bỏ chữ |
+| `transitionSeconds`, `zoomAmount` | Chuyển cảnh 0,1–0,8 giây; zoom 0–0,04 để giữ trọn ảnh |
+| `text.fontSize`, `text.fontPath` | Mặc định 44px và Segoe UI Semibold hỗ trợ tiếng Việt. Hai dòng được cân độ dài và căn giữa màn hình, chữ trắng có viền mảnh/bóng nhẹ, không dùng khung đen. Đo chiều rộng theo font thực, giảm tối thiểu 30px; báo lỗi nếu vẫn quá dài, không cắt bỏ chữ |
+| `text.positionY` | Vị trí 0–1 trong vùng an toàn, mặc định 0,68 |
+| `text.marginLeft/Right/Top/Bottom` | Lề theo pixel; mặc định 200/200/180/420. Chữ căn giữa video, chiều rộng tuân theo lề ngang lớn hơn để luôn cân và chừa nút TikTok |
+| `audio.volume`, `audio.fadeSeconds` | Mặc định âm lượng 0,3 và fade đầu/cuối 0,5 giây. Nhạc ngắn được lặp đủ thời lượng; thiếu nhạc dùng âm thanh im lặng |
+| `caption` | Tuỳ chọn caption TikTok; trong phiên TikTok riêng, caption nhập thủ công được ưu tiên |
+
+API `/api/tiktok/post` và `/api/run-pipeline` nhận thêm `slideshowConfig` để ghi đè cấu hình cho từng lượt. Trên giao diện, nhập mỗi dòng một câu cho link chạy thủ công/đăng lại TikTok; để trống dùng cấu hình mặc định. Hàng đợi đọc câu chuyện từ file cấu hình. Công tắc chèn chữ tắt sẽ xuất không chữ; câu tâm trạng đơn cũ không còn lặp trên slideshow TikTok. Phần dựng Instagram/Facebook vẫn dùng bộ dựng riêng trước đó.
+
+Ví dụ bốn câu và caption bạn cung cấp nằm trong `tiktok-slideshow.norway.example.json`. Đây là mẫu cấu hình; chỉ dùng tên Na Uy khi ảnh thực tế đúng địa điểm. Render kiểm tra bằng `npm run render:tiktok` hoặc:
+
+```powershell
+node render-tiktok-sample.mjs "downloads/thu-muc-anh" "tiktok-slideshow.norway.example.json" "artifacts/tiktok-landscape-sample.mp4"
+node verify-tiktok-slideshow.mjs "artifacts/tiktok-landscape-sample.mp4"
+```
+
+Lệnh render không đăng bài. Video mẫu và caption nằm trong `artifacts/`; khung đầu/giữa/cuối và mọi điểm chuyển cảnh nằm trong `artifacts/slideshow-qa/`. Bộ dựng lưu `.story.json` để đối chiếu thứ tự ảnh, thời gian và chữ. Thay cấu hình/ảnh/font làm cache mất hiệu lực. Các thay đổi nhằm cải thiện khả năng đọc và trải nghiệm xem, không bảo đảm lượt xem hoặc khắc phục hạn chế phân phối.
+
 Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (QuickWorker / 快手), hoàn toàn không dính logo watermark, tự động đăng lên Instagram, TikTok, Facebook.
 
 ---
@@ -72,7 +106,9 @@ Nếu server đang chạy bản cũ, dừng bằng `Ctrl+C` ở terminal đang c
 
 Để dùng Threads trong khi ứng dụng chính còn chạy bản cũ, chạy `npm run ui:threads` và mở `http://localhost:3001`. Phiên này chỉ đăng Threads bằng link bạn nhập, không chạy hoặc sửa hàng đợi Google Sheets của ứng dụng chính. Chạy `npm run test:threads-api` để kiểm tra API, phiên đăng nhập và giao diện của phiên này; lệnh kiểm tra không đăng bài thật.
 
-Hàng đợi đầy đủ có thể chạy bằng `npm run ui:all` tại `http://localhost:3002`. Tạm dừng hàng đợi ở server cũ trước khi dùng server này. Bật cả Instagram, Facebook, TikTok và Threads để mỗi link trong cột A được gửi tới cả bốn nền tảng. Nếu một nền tảng lỗi, công cụ giữ link và dừng hàng đợi, lưu những nền tảng đã đăng thành công. Khi bấm Bắt đầu lại, công cụ chỉ thử các nền tảng chưa thành công. Facebook được chia sẻ qua Instagram; chỉ đánh dấu Facebook thành công khi xác nhận công tắc chia sẻ đã bật.
+Hàng đợi đầy đủ có thể chạy bằng `npm run ui:all` tại `http://localhost:3002`. Tạm dừng hàng đợi ở server cũ trước khi dùng server này. Bật cả Instagram, Facebook, TikTok và Threads để mỗi link trong cột A được gửi tới cả bốn nền tảng. Nếu Instagram không tìm thấy ô tải tệp sau 20 giây, công cụ tự động bỏ qua Instagram/Facebook, tiếp tục các nền tảng khác rồi xóa link đã xử lý khỏi cột A và chuyển sang dòng tiếp theo. Giao diện ghi rõ đã bỏ qua, không đánh dấu Instagram/Facebook đăng thành công; file tải về vẫn được giữ lại. Với lỗi nền tảng khác, công cụ giữ link và dừng hàng đợi, lưu những nền tảng đã đăng thành công. Khi bấm Bắt đầu lại, công cụ chỉ thử các nền tảng chưa thành công và chưa bị bỏ qua. Facebook được chia sẻ qua Instagram; chỉ đánh dấu Facebook thành công khi xác nhận công tắc chia sẻ đã bật.
+
+TikTok đợi kiểm tra bản quyền nhạc và nội dung tối đa 3 phút, cập nhật thời gian chờ trên giao diện mỗi 30 giây. Nếu kiểm tra vẫn đang chạy sau 3 phút, công cụ tự động bấm Đăng một lần rồi chờ xác nhận thành công. Nếu TikTok báo lỗi/cảnh báo cụ thể, công cụ dừng và giữ link/video. Mô tả và hashtag được nhập, kiểm tra lại sau khi video xử lý xong để tránh bị TikTok xóa khi thay trình soạn thảo.
 
 1. **Công tắc độc lập từng nền tảng**:
    - Giao diện có 3 công tắc gạt riêng biệt:
@@ -92,10 +128,11 @@ https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJ
 
 - Dán mỗi link Kuaishou vào một dòng của **cột A**, bắt đầu từ **A1** trên trang tính đầu tiên.
 - Để trống ô nhập link trên giao diện rồi bấm **Bắt đầu**: ứng dụng quét từ A1 và xử lý ngay link đầu tiên tìm thấy. Sau khi xử lý xong, đồng hồ trên giao diện đếm ngược phút và giây tới lượt kế tiếp.
-- Chỉnh `intervalSeconds` trong file `.setting` để đặt thời gian chờ giữa hai lượt (đơn vị giây, tối thiểu 5; hiện là 3600 giây = 60 phút). Mỗi lượt chỉ xử lý một link. Xử lý thành công sẽ xóa **ô ở cột A** của dòng đó.
+- Chỉnh `intervalSeconds` trong file `.setting` để đặt thời gian chờ giữa hai lượt (đơn vị giây, tối thiểu 5; 1800 giây = 30 phút). Đây là khoảng nghỉ sau khi xử lý xong, không phải thời gian xử lý một bài. Mỗi lượt chỉ xử lý một link. Xử lý thành công sẽ xóa **ô ở cột A** của dòng đó.
 - Dòng trống được bỏ qua trong cùng lượt quét. Khi hết link trong cột A, ứng dụng tự dừng. Bấm **Bắt đầu** để quét lại từ A1 nếu đã thêm link mới.
 - Để có quyền xóa ô, bật Google Sheets API cho project của service account và chia sẻ bảng cho `lun-83@loginwithjavascript.iam.gserviceaccount.com` với quyền **Người chỉnh sửa**. Khóa JSON hiện được chỉ định trong `.setting`.
-- Các lựa chọn Instagram, TikTok, Facebook và ngôn ngữ caption trong giao diện cũng áp dụng cho hàng đợi. Nếu một link không hợp lệ hoặc xử lý lỗi, ứng dụng ghi lại lỗi, giữ nguyên ô và dừng tại dòng đó để bạn kiểm tra. Sau khi sửa link hoặc xử lý nguyên nhân, bấm **Bắt đầu** để thử lại. Nếu Google Sheets chưa xóa được ô sau khi xử lý thành công, ứng dụng sẽ thử xóa lại mà không chạy lại link.
+- Các lựa chọn Instagram, TikTok, Facebook và ngôn ngữ caption trong giao diện cũng áp dụng cho hàng đợi. Lỗi tải mạng hoặc lỗi đăng từng nền tảng sẽ giữ nguyên ô và dừng để bạn kiểm tra trước khi bấm **Bắt đầu** thử lại; nền tảng đã xác nhận thành công được bỏ qua. Link không hợp lệ và các lỗi xử lý khác được ghi lại rồi xóa ô để tiếp tục hàng đợi. Nếu Google Sheets chưa xóa được ô sau khi xử lý thành công, ứng dụng sẽ thử xóa lại mà không chạy lại link.
+- Khi xử lý, giao diện hiển thị bước hiện tại và thời gian của bước đó. Ảnh được tải tối đa 3 ảnh cùng lúc; video đã tạo được dùng lại khi thử lại nếu ảnh, nhạc và nội dung chữ không đổi. Phần tải từ mạng có giới hạn thời gian và thử lại tối đa 2 lần; thao tác đăng bài không được tự động phát lại.
 
 ---
 

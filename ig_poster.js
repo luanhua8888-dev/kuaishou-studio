@@ -1,4 +1,6 @@
 import { chromium } from 'playwright';
+import { waitForInstagramUpload } from './instagram-upload.js';
+import { confirmInstagramPost } from './instagram-confirmation.js';
 import { removeCaptionMentions } from './caption-text.js';
 import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
@@ -253,7 +255,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     // 3. Upload files via file input
     console.log(`[Instagram] Đang tải lên ${sanitizedUploadPaths.length} file...`);
     const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.waitFor({ state: 'attached', timeout: 20000 });
+    await waitForInstagramUpload(fileInput);
     await fileInput.setInputFiles(sanitizedUploadPaths);
     await page.waitForTimeout(4000);
 
@@ -414,61 +416,8 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     const shareBtn = dialog.locator('div[role="button"], button').filter({ hasText: /^(Chia sẻ|Share)$/ }).last();
     await shareBtn.waitFor({ state: 'visible', timeout: 10000 });
     await shareBtn.scrollIntoViewIfNeeded().catch(() => {});
-    await shareBtn.click();
-    await page.waitForTimeout(2000);
-
-    // Nếu sau 2s modal vẫn ở màn hình soạn thảo và nút Chia sẻ còn hiển thị, thử click lại
-    if (await shareBtn.isVisible().catch(() => false)) {
-      console.log('[Instagram] Thử nhấn lại nút Chia sẻ...');
-      await shareBtn.click({ force: true }).catch(() => {});
-    }
-
-    // 8. Wait for completion confirmation
-    console.log('[Instagram] Đang đợi Instagram xử lý và hoàn tất...');
-    const checkCompletion = async () => {
-      for (let i = 0; i < 60; i++) { // wait up to 120s
-        await page.waitForTimeout(2000);
-
-        const stateInfo = await page.evaluate(() => {
-          const text = document.body.innerText || '';
-          return {
-            isUploading: text.includes('Đang chia sẻ') || text.includes('Sharing'),
-            isDone: text.includes('Đã chia sẻ bài viết') ||
-                    text.includes('Đã chia sẻ thước phim') ||
-                    text.includes('Your post has been shared') ||
-                    text.includes('Your reel has been shared') ||
-                    text.includes('Đã chia sẻ')
-          };
-        });
-
-        if (stateInfo.isDone) {
-          console.log('[Instagram] Nhận diện thông báo hoàn tất: Đã chia sẻ!');
-          return true;
-        }
-
-        const hasCheckmark = (await page.locator('img[alt*="checkmark"], img[alt*="dấu kiểm"]').count()) > 0;
-        if (hasCheckmark) {
-          console.log('[Instagram] Nhận diện dấu kiểm hoàn tất thành công.');
-          return true;
-        }
-
-        const dialogStillThere = await page.locator('div[role="dialog"]').isVisible().catch(() => false);
-        if (!dialogStillThere) {
-          console.log('[Instagram] Hộp thoại đăng đã đóng, hoàn tất đăng bài.');
-          return true;
-        }
-
-        if (stateInfo.isUploading && i % 5 === 0) {
-          console.log('[Instagram] Đang trong tiến trình chia sẻ video...');
-        }
-      }
-      return false;
-    };
-
-    const isDone = await checkCompletion();
-    if (!isDone) {
-      throw new Error('Chưa nhận được xác nhận đăng bài thành công từ Instagram (quá thời gian chờ).');
-    }
+    // Video processing can exceed two minutes; submit once and observe confirmation.
+    await confirmInstagramPost(page, () => shareBtn.click());
 
     console.log('[Instagram] Đăng bài lên Instagram thành công!');
     // Update cookies

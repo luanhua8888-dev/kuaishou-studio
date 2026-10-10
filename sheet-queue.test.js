@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createSheetQueue, rowLink } from './sheet-queue.js';
+import { publishPlatforms } from './publish-platforms.js';
+import { waitForInstagramUpload } from './instagram-upload.js';
 
 function fixture(t, cells, pipeline = async () => ({ success: true })) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
@@ -26,6 +28,64 @@ function fixture(t, cells, pipeline = async () => ({ success: true })) {
 test('accepts only Kuaishou URLs', () => {
   assert.equal(rowLink('Share https://v.kuaishou.com/abc'), 'https://v.kuaishou.com/abc');
   assert.equal(rowLink('https://docs.google.com/example'), null);
+});
+
+test('Instagram file input timeout clears the row and continues without restarting', async t => {
+  const cells = ['https://v.kuaishou.com/no-input', 'https://v.kuaishou.com/next'];
+  let attempts = 0;
+  const { queue, cleared, calls } = fixture(t, cells, async (_, options) => publishPlatforms(options, {}, {
+    instagram: async () => {
+      attempts++;
+      await waitForInstagramUpload({ waitFor: async () => {
+        throw Object.assign(new Error('locator.waitFor: Timeout 20000ms exceeded'), { name: 'TimeoutError' });
+      } });
+    },
+    tiktok: async () => ({ success: true }),
+    threads: async () => ({ success: true })
+  }));
+  queue.configure({ options: { autoPostTikTok: false } });
+  await queue.tick();
+  const snapshot = queue.snapshot();
+  assert.equal(snapshot.enabled, true);
+  assert.equal(snapshot.cursor, 2);
+  assert.equal(snapshot.error, null);
+  assert.equal(snapshot.items[0].published.igPosted, false);
+  assert.deepEqual(snapshot.items[0].skippedPlatforms, ['instagram', 'facebook']);
+  assert.match(snapshot.items[0].warning, /bỏ qua/);
+  await queue.tick();
+  assert.equal(attempts, 2);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(cleared, [1, 2]);
+});
+
+test('retrying another failed platform does not retry skipped Instagram/Facebook', async t => {
+  const received = [];
+  const { queue } = fixture(t, ['https://v.kuaishou.com/skipped'], async (_, options) => {
+    received.push(options);
+    return received.length === 1
+      ? { success: false, partialFailure: true, skippedPlatforms: ['instagram', 'facebook'], skipWarning: 'Đã bỏ qua', error: 'Threads failed' }
+      : { success: true, threadsPosted: true };
+  });
+  await queue.tick();
+  queue.configure({ enabled: true });
+  await queue.tick();
+  assert.equal(received[1].autoPostIG, false);
+  assert.equal(received[1].autoPostFB, false);
+  assert.match(queue.snapshot().items[0].warning, /bỏ qua/);
+});
+
+test('keeps the row and stops after a network failure without clearing or replaying', async t => {
+  const cells = ['https://v.kuaishou.com/network', 'https://v.kuaishou.com/next'];
+  const { queue, calls, cleared } = fixture(t, cells, async () => { throw new Error('fetch failed'); });
+  await queue.tick();
+  await queue.tick();
+  assert.equal(queue.snapshot().enabled, false);
+  assert.equal(queue.snapshot().cursor, 1);
+  assert.equal(queue.snapshot().items[0].status, 'partial');
+  assert.match(queue.snapshot().error, /Link được giữ lại/);
+  assert.deepEqual(cleared, []);
+  assert.equal(calls.length, 1);
+  assert.equal(cells[0], 'https://v.kuaishou.com/network');
 });
 
 test('keeps a link after partial failure and retries only the missing platform', async t => {
@@ -286,4 +346,3 @@ test('runNextNow runs next link immediately skipping delay', async t => {
   assert.deepEqual(calls, ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second']);
   queue.stop();
 });
-

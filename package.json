@@ -6,6 +6,8 @@
     "start": "node download_kuaishou.js",
     "ui": "node server.js",
     "ui:threads": "node server.js --port=3001 --threads-only",
+    "ui:tiktok": "node server.js --port=3003 --tiktok-only",
+    "render:tiktok": "node render-tiktok-sample.mjs",
     "ui:all": "node server.js --port=3002",
     "test:threads-api": "node verify-threads-api.mjs",
     "ig:login": "node ig_poster.js login",

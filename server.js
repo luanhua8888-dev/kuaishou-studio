@@ -15,6 +15,10 @@ import { createSheetQueue, SHEET_URL, readSettings } from './sheet-queue.js';
 import { createGoogleSheet } from './google-sheet.js';
 import { getPostPage, findPhotoData } from './kuaishou-page.js';
 import { publishPlatforms } from './publish-platforms.js';
+import { requestPipeline } from './pipeline-request.js';
+import { networkRead, mapLimit } from './network-read.js';
+import { renderWithCache } from './render-cache.js';
+import { createTikTokSlideshow, readTikTokSlideshowConfig } from './tiktok-slideshow.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,28 +28,32 @@ const execPromise = util.promisify(exec);
 const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7) || 3000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Cổng server không hợp lệ.');
 const THREADS_ONLY = process.argv.includes('--threads-only');
+const TIKTOK_ONLY = process.argv.includes('--tiktok-only');
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 const pipelineProgress = new Map();
+const pipelineStageStarted = new Map();
+let sheetJobId = null;
 const googleSheet = createGoogleSheet({ settingsPath: path.join(__dirname, '.setting') });
 const sheetQueue = createSheetQueue({
-  statePath: path.join(__dirname, 'sheet-queue-state.json'),
+  statePath: path.join(__dirname, TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
   settingsPath: path.join(__dirname, '.setting'),
   sheet: googleSheet,
   async runPipeline(url, options) {
-    const response = await fetch(`http://127.0.0.1:${PORT}/api/run-pipeline`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, ...options, jobId: `sheet-${Date.now()}` })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
-    return result;
+    const jobId = `sheet-${Date.now()}`;
+    sheetJobId = jobId;
+    try { return await requestPipeline(PORT, { url, ...options, ...(TIKTOK_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true } : {}), jobId }); }
+    finally { if (sheetJobId === jobId) sheetJobId = null; }
   }
 });
 
 function setPipelineProgress(jobId, message) {
   if (typeof jobId === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(jobId)) {
+    if (pipelineProgress.get(jobId) !== message) {
+      const started = pipelineStageStarted.get(jobId);
+      if (started) console.log(`[Pipeline ${jobId}] ${pipelineProgress.get(jobId)}: ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      pipelineStageStarted.set(jobId, Date.now());
+    }
     pipelineProgress.set(jobId, message);
   }
 }
@@ -165,6 +173,13 @@ function roundedCaptionFilter(quoteText, fontPath, textPath) {
  * and optional pure text mood quote overlay (for TikTok only)
  */
 async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
+  const images = (Array.isArray(imageInput) ? imageInput : [imageInput]).filter(p => fs.existsSync(p)).slice(0, 10);
+  return renderWithCache(outputPath, [...images, audioPath && fs.existsSync(audioPath) ? audioPath : null],
+    { moodQuote, renderer: renderCinematicReel.toString() },
+    () => renderCinematicReel(images, audioPath, outputPath, moodQuote, frameCacheDir));
+}
+
+async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
   const images = Array.isArray(imageInput) ? imageInput : [imageInput];
   const validImages = images.filter(p => fs.existsSync(p));
   if (validImages.length === 0) {
@@ -257,7 +272,7 @@ async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote 
     }
 
     // Step 2: Build video from framed images
-    const transitionDuration = 0.75; // smooth crossfade duration in seconds
+    const transitionDuration = 0.65; // slightly quicker, smooth crossfade in seconds
 
     if (numImages === 1) {
       console.log('[Reel] Tạo video từ 1 hình ảnh chất lượng cao chuẩn HD 30fps...');
@@ -271,10 +286,10 @@ async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote 
       return outputPath;
     }
 
-    let slideDuration = 3.5;
+    let slideDuration = 3.15;
     if (audioDuration) {
       slideDuration = (audioDuration + (numImages - 1) * transitionDuration) / numImages;
-      slideDuration = Math.max(2.4, Math.min(5.0, slideDuration));
+      slideDuration = Math.max(2.4, Math.min(5.0, slideDuration)) * 0.9;
     }
 
     const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration;
@@ -352,8 +367,7 @@ async function generateCaptionAndHashtags(rawTitle, author, musicName = null, mu
       const en = await translateText(cleanTitle, 'en');
       titleLine = en || 'Peaceful moments';
     } else if (lang === 'both') {
-      const vi = await translateText(cleanTitle, 'vi');
-      const en = await translateText(cleanTitle, 'en');
+      const [vi, en] = await Promise.all([translateText(cleanTitle, 'vi'), translateText(cleanTitle, 'en')]);
       if (vi && en && vi !== en) {
         titleLine = `${vi}\n   "${en}"`;
       } else {
@@ -572,16 +586,17 @@ function extractImages(postData, html = '') {
 }
 
 async function downloadFile(url, destPath) {
-  const res = await fetch(url, {
+  if (fs.existsSync(destPath) && fs.statSync(destPath).size > 0) return;
+  const { data } = await networkRead(url, {
+    format: 'buffer', timeoutMs: 120000,
     headers: {
       'User-Agent': USER_AGENT,
       'Referer': 'https://www.kuaishou.com/'
     }
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
-  fs.writeFileSync(destPath, Buffer.from(arrayBuffer));
+  fs.writeFileSync(`${destPath}.part`, data);
+  fs.renameSync(`${destPath}.part`, destPath);
 }
 
 async function downloadImageAsJpg(url, destJpgPath) {
@@ -591,16 +606,16 @@ async function downloadImageAsJpg(url, destJpgPath) {
   if (url.includes('.webp')) {
     const directJpgUrl = url.replace(/\.webp(\?.*)?$/i, '.jpg$1');
     try {
-      const jpgRes = await fetch(directJpgUrl, {
+      const jpgRes = await networkRead(directJpgUrl, {
+        format: 'buffer', timeoutMs: 10000, attempts: 1,
         headers: {
           'User-Agent': USER_AGENT,
           'Referer': 'https://www.kuaishou.com/'
         }
       });
-      if (jpgRes.ok && (jpgRes.headers.get('content-type') || '').includes('image')) {
-        const ab = await jpgRes.arrayBuffer();
-        if (ab.byteLength > 1000) {
-          fs.writeFileSync(destJpgPath, Buffer.from(ab));
+      if (jpgRes.contentType.includes('image')) {
+        if (jpgRes.data.byteLength > 1000) {
+          fs.writeFileSync(destJpgPath, jpgRes.data);
           return destJpgPath;
         }
       }
@@ -608,16 +623,13 @@ async function downloadImageAsJpg(url, destJpgPath) {
   }
 
   // 2. Tải từ URL gốc
-  const res = await fetch(url, {
+  const { data: buffer } = await networkRead(url, {
+    format: 'buffer',
     headers: {
       'User-Agent': USER_AGENT,
       'Referer': 'https://www.kuaishou.com/'
     }
   });
-
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
 
   // Check if buffer is WEBP (starts with 'RIFF' and bytes 8..11 are 'WEBP')
   const isWebp = buffer.length > 12 && buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
@@ -639,6 +651,11 @@ async function downloadImageAsJpg(url, destJpgPath) {
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+  if (TIKTOK_ONLY && ['/api/ig/post', '/api/fb/post', '/api/threads/post'].includes(reqUrl.pathname)) {
+    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: false, error: 'Phiên này chỉ đăng TikTok.' }));
+    return;
+  }
   if (THREADS_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post'].includes(reqUrl.pathname)) {
     res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: false, error: 'Cửa sổ này chỉ đăng Threads. Dùng ứng dụng chính cho nền tảng khác.' }));
@@ -1007,7 +1024,7 @@ const server = http.createServer(async (req, res) => {
   // 8.3. API: Post to TikTok
   if (req.method === 'POST' && reqUrl.pathname === '/api/tiktok/post') {
     try {
-      const { post, customCaption } = await readJsonBody(req);
+      const { post, customCaption, slideshowConfig } = await readJsonBody(req);
       if (!post) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: false, error: 'Không có dữ liệu bài viết để đăng TikTok' }));
@@ -1036,9 +1053,9 @@ const server = http.createServer(async (req, res) => {
         const jpgs = fs.readdirSync(outputDir).filter(f => f.endsWith('.jpg') && !f.includes('cover')).map(f => path.join(outputDir, f));
         if (jpgs.length > 0) {
           const audioPath = path.join(outputDir, 'audio.m4a');
-          const quoteText = (post.enableMoodQuote !== false) ? cleanPureText(post.moodQuoteVi || post.moodQuote || '') : '';
-          console.log(`[TikTok] Đang tạo video TikTok 9:16 ${quoteText ? 'với chữ tâm trạng tiếng Việt: "' + quoteText + '"' : 'sạch chữ'}...`);
-          await createCinematicReel(jpgs, fs.existsSync(audioPath) ? audioPath : null, tiktokReelPath, quoteText);
+          const config = readTikTokSlideshowConfig(slideshowConfig);
+          if (post.enableMoodQuote === false) config.sceneTexts = [];
+          await createTikTokSlideshow(jpgs.sort(), fs.existsSync(audioPath) ? audioPath : null, tiktokReelPath, config);
           targetVideo = tiktokReelPath;
         } else {
           const reelPath = path.join(outputDir, 'reel.mp4');
@@ -1054,7 +1071,10 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const captionText = ensureCaptionHashtags(removeCaptionMentions(customCaption !== undefined ? customCaption : post.title), 'en', post.title);
+      const slideshowCaption = readTikTokSlideshowConfig(slideshowConfig).caption;
+      const captionText = customCaption !== undefined || slideshowCaption !== undefined
+        ? removeCaptionMentions(customCaption ?? slideshowCaption)
+        : ensureCaptionHashtags(removeCaptionMentions(post.title), 'en', post.title);
       await postToTikTok({
         videoPath: targetVideo,
         caption: captionText,
@@ -1103,10 +1123,19 @@ const server = http.createServer(async (req, res) => {
     try {
       let result;
       if (req.method === 'GET') result = sheetQueue.snapshot();
-      else if (req.method === 'POST') result = sheetQueue.configure(await readJsonBody(req));
+      else if (req.method === 'POST') {
+        const payload = await readJsonBody(req);
+        if (TIKTOK_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true };
+        result = sheetQueue.configure(payload);
+      }
       else { res.writeHead(405); res.end(); return; }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ ...result, sheetUrl: SHEET_URL }));
+      res.end(JSON.stringify({ ...result, sheetUrl: SHEET_URL,
+        tiktokOnly: TIKTOK_ONLY,
+        ...(TIKTOK_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true } } : {}),
+        stage: sheetJobId ? pipelineProgress.get(sheetJobId) || null : null,
+        stageStartedAt: sheetJobId ? pipelineStageStarted.get(sheetJobId) || null : null,
+      }));
     } catch (error) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: error.message }));
@@ -1117,8 +1146,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && reqUrl.pathname === '/api/run-pipeline') {
     let jobId = null;
     try {
-      const { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, jobId: requestJobId } = await readJsonBody(req);
+      let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
+      if (TIKTOK_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostTikTok = true; }
       if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB)) throw new Error('Phiên này chỉ đăng Threads.');
+      const tikTokConfig = autoPostTikTok ? readTikTokSlideshowConfig(slideshowConfig) : null;
       jobId = requestJobId;
       setPipelineProgress(jobId, 'Đang đọc nội dung Kuaishou…');
       const cleanUrl = extractUrl(url);
@@ -1178,23 +1209,17 @@ const server = http.createServer(async (req, res) => {
           await downloadImageAsJpg(post.coverUrl, path.join(outputDir, 'cover.jpg')).catch(() => {});
         }
       } else {
-        const localImagePaths = [];
-        for (let i = 0; i < (post.images || []).length; i++) {
-          const imgUrl = post.images[i];
-          const fileName = `image_${String(i + 1).padStart(2, '0')}.jpg`;
-          const filePath = path.join(outputDir, fileName);
-          await downloadImageAsJpg(imgUrl, filePath);
-          localImagePaths.push(filePath);
-        }
-
         const audioPath = path.join(outputDir, 'audio.m4a');
-        if (post.musicUrl) {
-          try {
-            await downloadFile(post.musicUrl, audioPath);
-          } catch (e) {
+        const [localImagePaths] = await Promise.all([
+          mapLimit(post.images || [], 3, async (imgUrl, i) => {
+            const filePath = path.join(outputDir, `image_${String(i + 1).padStart(2, '0')}.jpg`);
+            await downloadImageAsJpg(imgUrl, filePath);
+            return filePath;
+          }),
+          post.musicUrl ? downloadFile(post.musicUrl, audioPath).catch(e => {
             console.error('Không thể tải audio:', e.message);
-          }
-        }
+          }) : Promise.resolve(),
+        ]);
 
         uploadPaths = localImagePaths;
         const validAudio = fs.existsSync(audioPath) ? audioPath : null;
@@ -1222,12 +1247,14 @@ const server = http.createServer(async (req, res) => {
             if (autoPostTikTok) {
               try {
                 setPipelineProgress(jobId, 'Đang ghép video có caption cho TikTok…');
-                console.log(`[TikTok] Đang tạo video TikTok 9:16 ${finalMoodQuoteVi ? 'với chữ tâm trạng tiếng Việt: "' + finalMoodQuoteVi + '"' : 'sạch chữ'}...`);
-                await createCinematicReel(localImagePaths, validAudio, tiktokReelPath, finalMoodQuoteVi, frameCacheDir);
+                console.log('[TikTok] Đang dựng slideshow có chuyển động và câu chuyện từng cảnh...');
+                const config = { ...tikTokConfig };
+                if (!enableMoodQuote) config.sceneTexts = [];
+                await createTikTokSlideshow(localImagePaths, validAudio, tiktokReelPath, config);
                 targetVideo = tiktokReelPath;
               } catch (e) {
                 console.error('Không thể tạo Video TikTok:', e.message);
-                if (fs.existsSync(reelPath)) targetVideo = reelPath;
+                throw e;
               }
             }
           }
@@ -1239,13 +1266,13 @@ const server = http.createServer(async (req, res) => {
       const published = await publishPlatforms(
         { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads },
         { imagePaths: uploadPaths, videoPath: targetVideo, caption: finalCaption, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
-        { instagram: postToInstagram, tiktok: postToTikTok, threads: postToThreads },
+        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: customCaption?.trim() ? removeCaptionMentions(customCaption) : (tikTokConfig?.caption ?? args.caption) }), threads: postToThreads },
         message => setPipelineProgress(jobId, message)
       );
 
       // Keep media when Threads needs a retry, without reposting other platforms.
       let cleanedUp = false;
-      if ((autoPostIG || autoPostFB || autoPostTikTok || autoPostThreads) && published.success) {
+      if ((autoPostIG || autoPostFB || autoPostTikTok || autoPostThreads) && published.success && !published.skippedPlatforms?.length) {
         try {
           removeDownloadDirectory(outputDir);
           cleanedUp = true;
@@ -1277,7 +1304,10 @@ const server = http.createServer(async (req, res) => {
     } finally {
       if (typeof jobId === 'string') {
         const completedJobId = jobId;
-        setTimeout(() => pipelineProgress.delete(completedJobId), 60_000).unref();
+        setTimeout(() => {
+          pipelineProgress.delete(completedJobId);
+          pipelineStageStarted.delete(completedJobId);
+        }, 60_000).unref();
       }
     }
     return;
