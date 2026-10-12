@@ -12,9 +12,11 @@
     "ui:all": "node server.js --port=3002",
     "test:threads-api": "node verify-threads-api.mjs",
     "ig:login": "node ig_poster.js login",
-    "threads:login": "node threads_poster.js login"
+    "threads:login": "node threads_poster.js login",
+    "ui:x": "node server.js --port=3004 --x-only"
   },
   "dependencies": {
-    "playwright": "^1.63.0"
+    "playwright": "^1.63.0",
+    "twitter-text": "^3.1.0"
   }
 }

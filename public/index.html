@@ -145,7 +145,7 @@
 <body>
   <div class="container">
     <header>
-      <div class="header-top"><div class="logo-badge">KUAISHOU STUDIO</div><span class="header-note">Một nơi quản lý · Bốn nền tảng</span></div>
+      <div class="header-top"><div class="logo-badge">KUAISHOU STUDIO</div><span class="header-note">Một nơi quản lý · Năm nền tảng</span></div>
       <div class="title-row">
         <h1>Đăng nội dung, đơn giản hơn.</h1>
         <div id="titleCountdown" class="title-countdown" data-state="paused" aria-label="Trạng thái hàng đợi">
@@ -191,6 +191,11 @@
           <p class="platform-desc">Ảnh & video trực tiếp</p>
           <button type="button" id="threadsStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Threads"><span id="threadsDot" class="dot dot-gray"></span><span id="threadsStatusText">Đang kiểm tra…</span></button>
         </div>
+      </div>
+      <div class="switch-card" id="swCardX" style="margin-top:10px">
+        <div class="platform-top"><span class="platform-name">X (Twitter)</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostX" aria-label="Đăng lên X"><span class="slider"></span></label></div>
+        <p class="platform-desc">Video hoặc tối đa 4 ảnh</p>
+        <button type="button" id="xStatusBtn" class="ig-status-pill"><span id="xDot" class="dot dot-gray"></span><span id="xStatusText">Đang kiểm tra…</span></button>
       </div>
       <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook cần tài khoản liên kết với Instagram.</p>
     </section>
@@ -272,6 +277,7 @@
         <button id="btnManualPostFB" class="btn" >
           Đăng lại lên Facebook
         </button>
+        <button id="btnManualPostX" class="btn btn-secondary">Đăng riêng lên X</button>
         <button id="btnManualPostThreads" class="btn btn-secondary">Đăng riêng lên Threads</button>
         <button id="btnOpenFolder" class="btn btn-secondary" style="display: none;">
           Mở thư mục lưu
@@ -330,6 +336,23 @@
     <div><strong>Sắp hết link trong bảng</strong><p id="sheetReminderText"></p><a href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Thêm link vào bảng ↗</a></div>
     <button type="button" id="btnDismissSheetReminder" class="sheet-reminder-close" aria-label="Đóng nhắc nhở">×</button>
   </aside>
+  <dialog id="xConnectDialog" style="max-width:520px;width:calc(100% - 48px);padding:24px;border:1px solid #ccc;border-radius:16px">
+    <form id="xConnectForm">
+      <h2>Kết nối X</h2>
+      <p class="helper">Bấm Đăng nhập X, rồi xác nhận cấp quyền trên trang X. Ứng dụng sẽ tự nhận và lưu kết nối trên máy này.</p>
+      <button type="button" class="btn btn-primary" id="xOAuthLogin">Đăng nhập X</button>
+      <p class="helper">Callback cần lưu trên X Developer: <code id="xCallbackUri"></code></p>
+      <details style="margin-top:16px"><summary>Nhập token có sẵn</summary>
+      <p class="helper">Dùng OAuth 2.0 User Access Token có quyền tweet.read, tweet.write, users.read và media.write.</p>
+      <label for="xAccessToken">User Access Token</label>
+      <input id="xAccessToken" type="password" required autocomplete="off" style="width:100%;margin:12px 0;padding:10px" placeholder="Dán token tại đây">
+      <p class="helper">Token nhập tay không được tự làm mới. Token ứng dụng (App-only Bearer Token) không dùng để đăng bài.</p>
+      <button type="submit" class="btn btn-primary" id="xConnectSave">Kiểm tra và lưu</button>
+      </details>
+      <p id="xConnectError" role="alert"></p>
+      <button type="button" class="btn btn-secondary" id="xConnectCancel">Đóng</button>
+    </form>
+  </dialog>
   <script>
     const urlInput = document.getElementById('urlInput');
     const btnRun = document.getElementById('btnRun');
@@ -515,6 +538,7 @@
         autoPostTikTok: chkAutoPostTikTok.checked,
         autoPostFB: chkAutoPostFB.checked,
         autoPostThreads: chkAutoPostThreads.checked,
+        autoPostX: chkAutoPostX.checked,
         asReel: chkAsReel.checked,
         captionLang: captionLangSelect.value,
         enableMoodQuote: chkAddMoodText.checked
@@ -528,21 +552,31 @@
       }
       threadsOnlyMode = Boolean(data.threadsOnly);
       if (data.tiktokOnly) {
-        [swCardIG, swCardFB, swCardThreads].forEach(card => { card.style.display = 'none'; });
-        ['btnManualPostIG', 'btnManualPostFB', 'btnManualPostThreads'].forEach(id => { document.getElementById(id).style.display = 'none'; });
-        [chkAutoPostIG, chkAutoPostFB, chkAutoPostThreads].forEach(input => { input.checked = false; input.disabled = true; });
+        [swCardIG, swCardFB, swCardThreads, swCardX].forEach(card => { card.style.display = 'none'; });
+        ['btnManualPostIG', 'btnManualPostFB', 'btnManualPostThreads', 'btnManualPostX'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+        [chkAutoPostIG, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX].forEach(input => { input.checked = false; input.disabled = true; });
         chkAutoPostTikTok.checked = true;
         chkAutoPostTikTok.disabled = true;
       }
       if (threadsOnlyMode) {
-        [swCardIG, swCardTikTok, swCardFB].forEach(card => { card.style.display = 'none'; });
-        ['btnManualPostIG', 'btnManualPostTikTok', 'btnManualPostFB'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+        [swCardIG, swCardTikTok, swCardFB, swCardX].forEach(card => { card.style.display = 'none'; });
+        ['btnManualPostIG', 'btnManualPostTikTok', 'btnManualPostFB', 'btnManualPostX'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+      }
+      if (data.xOnly) {
+        document.querySelector('.header-note').textContent = 'Phiên đăng riêng lên X';
+        document.querySelector('.platform-helper').textContent = 'Bấm trạng thái X để kết nối tài khoản bằng User Access Token.';
+        [swCardIG, swCardTikTok, swCardFB, swCardThreads].forEach(card => { card.style.display = 'none'; });
+        ['btnManualPostIG', 'btnManualPostTikTok', 'btnManualPostFB', 'btnManualPostThreads'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+        [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads].forEach(input => { input.checked = false; input.disabled = true; });
+        chkAutoPostX.checked = true;
+        chkAutoPostX.disabled = true;
       }
       if (!sheetSettingsLoaded && data.options) {
         chkAutoPostIG.checked = data.options.autoPostIG;
         chkAutoPostTikTok.checked = data.options.autoPostTikTok;
         chkAutoPostFB.checked = data.options.autoPostFB;
         chkAutoPostThreads.checked = Boolean(data.options.autoPostThreads);
+        chkAutoPostX.checked = Boolean(data.options.autoPostX);
         chkAsReel.checked = data.options.asReel;
         chkAddMoodText.checked = data.options.enableMoodQuote;
         captionLangSelect.value = data.options.captionLang;
@@ -587,6 +621,8 @@
     const chkAutoPostIG = document.getElementById('chkAutoPostIG');
     const chkAutoPostTikTok = document.getElementById('chkAutoPostTikTok');
     const chkAutoPostFB = document.getElementById('chkAutoPostFB');
+    const chkAutoPostX = document.getElementById('chkAutoPostX');
+    const swCardX = document.getElementById('swCardX');
     const chkAutoPostThreads = document.getElementById('chkAutoPostThreads');
     const swCardThreads = document.getElementById('swCardThreads');
     const swCardIG = document.getElementById('swCardIG');
@@ -598,7 +634,7 @@
     const moodTextInput = document.getElementById('moodTextInput');
     const moodTextContainer = document.getElementById('moodTextContainer');
 
-    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
+    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
       input.addEventListener('change', () => setTimeout(async () => {
         if (!sheetSettingsLoaded || threadsOnlyMode) return;
         try {
@@ -711,6 +747,44 @@
     let isIgLoggedIn = false;
     let isTikTokLoggedIn = false;
     let isThreadsLoggedIn = false;
+    let isXLoggedIn = false;
+    async function checkXStatus() {
+      try {
+        const response = await fetch('/api/x/status', { cache: 'no-store' });
+        const data = await response.json();
+        isXLoggedIn = Boolean(data.loggedIn);
+        document.getElementById('xOAuthLogin').disabled = !data.oauthConfigured;
+        document.getElementById('xDot').className = `dot ${isXLoggedIn ? 'dot-green' : 'dot-gray'}`;
+        document.getElementById('xStatusText').textContent = isXLoggedIn ? `Đã lưu kết nối @${data.username}` : 'Bấm để kết nối';
+      } catch { isXLoggedIn = false; document.getElementById('xStatusText').textContent = 'Chưa kết nối'; }
+    }
+    checkXStatus();
+    setInterval(checkXStatus, 5000);
+    const xDialog = document.getElementById('xConnectDialog');
+    const xCallback = `http://127.0.0.1:${location.port || '3000'}/api/x/callback`;
+    document.getElementById('xCallbackUri').textContent = xCallback;
+    document.getElementById('xOAuthLogin').addEventListener('click', () => {
+      window.open(`http://127.0.0.1:${location.port || '3000'}/api/x/oauth/start`, '_blank', 'noopener,noreferrer');
+      xDialog.close();
+      showStatus('Hoàn tất đăng nhập và xác nhận cấp quyền trên trang X vừa mở. Kết nối sẽ tự cập nhật.', 'loading');
+    });
+    document.getElementById('xStatusBtn').addEventListener('click', () => xDialog.showModal());
+    document.getElementById('xConnectCancel').addEventListener('click', () => xDialog.close());
+    xDialog.addEventListener('close', () => { document.getElementById('xAccessToken').value = ''; document.getElementById('xConnectError').textContent = ''; });
+    document.getElementById('xConnectForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const save = document.getElementById('xConnectSave');
+      save.disabled = true;
+      try {
+        const response = await fetch('/api/x/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: document.getElementById('xAccessToken').value.trim() }) });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Không kết nối được X');
+        xDialog.close();
+        await checkXStatus();
+        showStatus('Đã kết nối tài khoản X.', 'success');
+      } catch (error) { document.getElementById('xConnectError').textContent = error.message; }
+      finally { save.disabled = false; }
+    });
     async function checkThreadsStatus() {
       try {
         const response = await fetch('/api/threads/status');
@@ -743,6 +817,7 @@
       swCardTikTok.classList.toggle('active-tiktok', chkAutoPostTikTok.checked);
       swCardFB.classList.toggle('active-fb', chkAutoPostFB.checked);
       swCardThreads.classList.toggle('active-ig', chkAutoPostThreads.checked);
+      swCardX.classList.toggle('active-ig', chkAutoPostX.checked);
 
       btnRun.textContent = urlInput.value.trim() ? 'Đăng link này' : (sheetEnabled ? 'Hàng đợi đang bật' : 'Bắt đầu hàng đợi');
     }
@@ -764,6 +839,7 @@
 
     chkAutoPostTikTok.addEventListener('change', updateSwitchUI);
     chkAutoPostThreads.addEventListener('change', updateSwitchUI);
+    chkAutoPostX.addEventListener('change', updateSwitchUI);
     updateSwitchUI();
 
     // Check IG Login Status
@@ -939,6 +1015,7 @@
       const shouldPostTikTok = chkAutoPostTikTok.checked;
       const shouldPostFB = chkAutoPostFB.checked;
       const shouldPostThreads = chkAutoPostThreads.checked;
+      const shouldPostX = chkAutoPostX.checked;
 
       btnRun.disabled = true;
       btnOpenFolder.style.display = 'none';
@@ -950,6 +1027,7 @@
       showStatus(statusMsg, 'loading');
 
       try {
+        if (shouldPostX && !isXLoggedIn) throw new Error('Chưa kết nối X. Bấm trạng thái X phía trên để cấu hình token.');
         if (shouldPostThreads && !isThreadsLoggedIn) {
           throw new Error('Chưa đăng nhập Threads. Bấm nút Threads phía trên để kết nối trước.');
         }
@@ -970,6 +1048,7 @@
         if (shouldPostTikTok) activeTargets.push('TikTok');
         if (shouldPostFB) activeTargets.push('Facebook');
         if (shouldPostThreads) activeTargets.push('Threads');
+        if (shouldPostX) activeTargets.push('X');
 
         if (activeTargets.length > 0) {
           showStatus(`Đang tải nội dung, tạo Caption & tự động đăng lên: ${activeTargets.join(' + ')}...`, 'loading');
@@ -998,6 +1077,7 @@
             autoPostTikTok: shouldPostTikTok,
             autoPostFB: shouldPostFB,
             autoPostThreads: shouldPostThreads,
+            autoPostX: shouldPostX,
             asReel: chkAsReel.checked,
             captionLang: captionLangSelect.value,
             jobId,
@@ -1023,6 +1103,7 @@
         if (data.tiktokPosted) postedList.push('TIKTOK');
         if (data.fbPosted) postedList.push('FACEBOOK');
         if (data.threadsPosted) postedList.push('THREADS');
+        if (data.xPosted) postedList.push('X');
 
         const typeStr = data.isVideo ? 'video gốc' : `${data.count} ảnh`;
         let successMsg = `Hoàn tất! Đã tải ${typeStr}.`;
@@ -1156,6 +1237,23 @@
 
       resultSection.style.display = 'block';
     }
+
+    document.getElementById('btnManualPostX').addEventListener('click', async event => {
+      if (!currentResult) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      showStatus('Đang đăng riêng lên X…', 'loading');
+      try {
+        const response = await fetch('/api/x/post', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ post: { ...currentResult.post, asReel: chkAsReel.checked }, customCaption: captionDisplay.value })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'X chưa xác nhận đăng thành công');
+        showStatus(data.message, 'success');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally { button.disabled = false; }
+    });
 
     document.getElementById('btnManualPostThreads').addEventListener('click', async event => {
       if (!currentResult) return;

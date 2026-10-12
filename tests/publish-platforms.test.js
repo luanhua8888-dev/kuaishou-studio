@@ -6,6 +6,24 @@ import { UPLOAD_INPUT_UNAVAILABLE } from '../instagram-upload.js';
 const options = { autoPostIG: true, autoPostFB: true, autoPostTikTok: true, autoPostThreads: true };
 const media = { imagePaths: ['video.mp4'], videoPath: 'video.mp4', caption: 'Một khoảnh khắc' };
 
+test('X failure preserves confirmed destinations and successful X returns its URL', async () => {
+  const posters = {
+    instagram: async () => ({ success: true, facebookShared: true }),
+    tiktok: async () => ({ success: true }), threads: async () => ({ success: true }),
+    x: async () => { throw new Error('Token expired'); }
+  };
+  const result = await publishPlatforms({ ...options, autoPostX: true }, media, posters);
+  assert.equal(result.xPosted, false);
+  assert.equal(result.partialFailure, true);
+  assert.equal(result.igPosted && result.fbPosted && result.tiktokPosted && result.threadsPosted, true);
+  assert.match(result.error, /X: Token expired/);
+  const retry = await publishPlatforms({ autoPostX: true }, media, {
+    x: async () => ({ success: true, postUrl: 'https://x.com/i/status/123' })
+  });
+  assert.equal(retry.xPosted, true);
+  assert.equal(retry.xPostUrl, 'https://x.com/i/status/123');
+});
+
 test('missing Instagram upload input reports partial failure and continues other platforms', async () => {
   const result = await publishPlatforms(options, media, {
     instagram: async () => { throw Object.assign(new Error('Đã tự động bỏ qua Instagram/Facebook'), { code: UPLOAD_INPUT_UNAVAILABLE }); },

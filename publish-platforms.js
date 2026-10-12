@@ -2,7 +2,7 @@ import { UPLOAD_INPUT_UNAVAILABLE } from './instagram-upload.js';
 
 // Attempt each selected destination even if another destination fails.
 export async function publishPlatforms(options, media, posters, progress = () => {}) {
-  const result = { igPosted: false, fbPosted: false, tiktokPosted: false, threadsPosted: false, errors: [] };
+  const result = { igPosted: false, fbPosted: false, tiktokPosted: false, threadsPosted: false, xPosted: false, errors: [] };
   if (options.autoPostIG || options.autoPostFB) {
     progress('Đang đăng lên Instagram và Facebook…');
     try {
@@ -38,6 +38,15 @@ export async function publishPlatforms(options, media, posters, progress = () =>
       if (!posted?.success) throw new Error(posted?.message || 'Chưa xác nhận đăng thành công');
       result.threadsPosted = true;
     } catch (error) { result.errors.push(`Threads: ${error.message}`); }
+  }
+  if (options.autoPostX) {
+    progress('Đang đăng lên X…');
+    try {
+      const posted = await posters.x({ imagePaths: media.imagePaths, caption: media.xCaption ?? media.caption, onProgress: progress });
+      if (!posted?.success) throw new Error(posted?.message || 'Chưa xác nhận đăng X thành công');
+      result.xPosted = true;
+      result.xPostUrl = posted.postUrl;
+    } catch (error) { result.errors.push(`X: ${error.message}`); }
   }
   result.success = result.errors.length === 0;
   result.partialFailure = !result.success;

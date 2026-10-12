@@ -1,4 +1,6 @@
 import http from 'http';
+import { connectionStatus as xStatus, connectX, postToX, prepareXCaption, createXClient } from './x_poster.js';
+import { xOAuth } from './x-oauth.js';
 import { normalizeCaptionText, removeCaptionMentions, readJsonBody } from './caption-text.js';
 import { relevantHashtags, ensureCaptionHashtags } from './relevance-tags.js';
 import { buildThreadsCaption } from './threads-caption.js';
@@ -28,7 +30,9 @@ const execPromise = util.promisify(exec);
 const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7) || 3000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Cổng server không hợp lệ.');
 const THREADS_ONLY = process.argv.includes('--threads-only');
+const X_ONLY = process.argv.includes('--x-only');
 const TIKTOK_ONLY = process.argv.includes('--tiktok-only');
+if ([X_ONLY, TIKTOK_ONLY, THREADS_ONLY].filter(Boolean).length > 1) throw new Error('Chỉ chọn một phiên nền tảng riêng.');
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 const pipelineProgress = new Map();
@@ -36,13 +40,13 @@ const pipelineStageStarted = new Map();
 let sheetJobId = null;
 const googleSheet = createGoogleSheet({ settingsPath: path.join(__dirname, '.setting') });
 const sheetQueue = createSheetQueue({
-  statePath: path.join(__dirname, TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
+  statePath: path.join(__dirname, X_ONLY ? 'sheet-queue-x-state.json' : TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
   settingsPath: path.join(__dirname, '.setting'),
   sheet: googleSheet,
   async runPipeline(url, options) {
     const jobId = `sheet-${Date.now()}`;
     sheetJobId = jobId;
-    try { return await requestPipeline(PORT, { url, ...options, ...(TIKTOK_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true } : {}), jobId }); }
+    try { return await requestPipeline(PORT, { url, ...options, ...(X_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true } : {}), ...(TIKTOK_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostTikTok: true } : {}), jobId }); }
     finally { if (sheetJobId === jobId) sheetJobId = null; }
   }
 });
@@ -651,17 +655,73 @@ async function downloadImageAsJpg(url, destJpgPath) {
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
-  if (TIKTOK_ONLY && ['/api/ig/post', '/api/fb/post', '/api/threads/post'].includes(reqUrl.pathname)) {
+  if (TIKTOK_ONLY && ['/api/ig/post', '/api/fb/post', '/api/threads/post', '/api/x/post'].includes(reqUrl.pathname)) {
     res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: false, error: 'Phiên này chỉ đăng TikTok.' }));
     return;
   }
-  if (THREADS_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post'].includes(reqUrl.pathname)) {
+  if (THREADS_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post', '/api/x/post'].includes(reqUrl.pathname)) {
     res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: false, error: 'Cửa sổ này chỉ đăng Threads. Dùng ứng dụng chính cho nền tảng khác.' }));
     return;
   }
 
+  if (X_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post', '/api/threads/post'].includes(reqUrl.pathname)) {
+    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: false, error: 'Phiên này chỉ đăng X.' }));
+    return;
+  }
+  if (['/api/x/oauth/start', '/api/x/callback'].includes(reqUrl.pathname) && req.method === 'GET') {
+    const remote = req.socket.remoteAddress;
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote)) { res.writeHead(403); res.end(); return; }
+    if (req.headers.host !== `127.0.0.1:${PORT}`) {
+      res.writeHead(400); res.end('Use the sign-in button at localhost to begin with 127.0.0.1.'); return;
+    }
+    const cookieName = `x_oauth_state_${PORT}`;
+    try {
+      if (reqUrl.pathname === '/api/x/oauth/start') {
+        const login = xOAuth.begin(PORT);
+        res.writeHead(302, { Location: login.url, 'Cache-Control': 'no-store',
+          'Set-Cookie': `${cookieName}=${login.state}; HttpOnly; SameSite=Lax; Path=/api/x; Max-Age=600` });
+        res.end();
+      } else {
+        const browserState = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+        await xOAuth.finish({ code: reqUrl.searchParams.get('code'), state: reqUrl.searchParams.get('state'), browserState,
+          error: reqUrl.searchParams.get('error'), verify: accessToken => createXClient({ accessToken }).verify() });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+          'Set-Cookie': `${cookieName}=; HttpOnly; SameSite=Lax; Path=/api/x; Max-Age=0` });
+        res.end(`<html lang="vi"><meta charset="utf-8"><title>Đã kết nối X</title><h1>Đã kết nối X thành công</h1><p>Bạn có thể đóng tab này và bật công tắc X trong ứng dụng.</p><a href="http://localhost:${PORT}/">Quay lại ứng dụng</a></html>`);
+      }
+    } catch (error) {
+      const escaped = error.message.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+        'Set-Cookie': `${cookieName}=; HttpOnly; SameSite=Lax; Path=/api/x; Max-Age=0` });
+      res.end(`<html lang="vi"><meta charset="utf-8"><title>Kết nối X chưa hoàn tất</title><h1>Kết nối X chưa hoàn tất</h1><p>${escaped}</p><a href="http://localhost:${PORT}/">Quay lại ứng dụng để thử lại</a></html>`);
+    }
+    return;
+  }
+  if (reqUrl.pathname === '/api/x/status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ success: true, ...xStatus() }));
+    return;
+  }
+  if (reqUrl.pathname === '/api/x/login' && req.method === 'POST') {
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) { res.writeHead(403); res.end(); return; }
+    // Credentials may only be submitted by this local UI, never a foreign origin.
+    const origin = req.headers.origin;
+    const allowed = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`];
+    if (origin && !allowed.includes(origin)) { res.writeHead(403); res.end(); return; }
+    try {
+      const { accessToken } = await readJsonBody(req);
+      const result = await connectX(accessToken);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: error.message }));
+    }
+    return;
+  }
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
@@ -912,11 +972,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Prepare local media for manual posts to Instagram, Facebook or Threads.
-  if (req.method === 'POST' && ['/api/ig/post', '/api/fb/post', '/api/threads/post'].includes(reqUrl.pathname)) {
+  if (req.method === 'POST' && ['/api/ig/post', '/api/fb/post', '/api/threads/post', '/api/x/post'].includes(reqUrl.pathname)) {
     try {
       const { post, customCaption, shareToFacebook, captionLang = 'vi' } = await readJsonBody(req);
       const isFbOnly = reqUrl.pathname === '/api/fb/post';
       const isThreadsOnly = reqUrl.pathname === '/api/threads/post';
+      const isXOnly = reqUrl.pathname === '/api/x/post';
       const doShareFB = isFbOnly || Boolean(shareToFacebook);
 
       if (!post || (!post.isVideo && (!Array.isArray(post.images) || post.images.length === 0))) {
@@ -973,6 +1034,12 @@ const server = http.createServer(async (req, res) => {
         rawCaption = generated.fullText;
       }
       const captionText = ensureCaptionHashtags(removeCaptionMentions(rawCaption), captionLang, post.title);
+      if (isXOnly) {
+        const result = await postToX({ imagePaths: uploadPaths, caption: prepareXCaption(captionText, { truncate: !customCaption?.trim() }) });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(result));
+        return;
+      }
       if (isThreadsOnly) {
         const result = await postToThreads({ imagePaths: uploadPaths, caption: buildThreadsCaption(captionText, 'en', { prompt: false }) });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1176,7 +1243,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(req.method === 'GET' ? 200 : 409, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(req.method === 'GET' ? {
         threadsOnly: true, enabled: false, running: false, nextRunAt: null, items: [],
-        options: { autoPostIG: false, autoPostTikTok: false, autoPostFB: false, autoPostThreads: true, asReel: true, captionLang: 'vi', enableMoodQuote: false },
+        options: { autoPostIG: false, autoPostTikTok: false, autoPostFB: false, autoPostThreads: true, autoPostX: false, asReel: true, captionLang: 'vi', enableMoodQuote: false },
         error: 'Đăng riêng lên Threads: dán link ở ô phía trên rồi bấm Bắt đầu. Hàng đợi của ứng dụng chính vẫn chạy riêng.'
       } : { error: 'Phiên Threads riêng không chạy hàng đợi Google Sheets.' }));
       return;
@@ -1186,14 +1253,16 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') result = sheetQueue.snapshot();
       else if (req.method === 'POST') {
         const payload = await readJsonBody(req);
-        if (TIKTOK_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true };
+        if (TIKTOK_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostTikTok: true };
+        if (X_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true };
         result = sheetQueue.configure(payload);
       }
       else { res.writeHead(405); res.end(); return; }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ...result, sheetUrl: SHEET_URL,
-        tiktokOnly: TIKTOK_ONLY,
-        ...(TIKTOK_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: true } } : {}),
+        tiktokOnly: TIKTOK_ONLY, xOnly: X_ONLY,
+        ...(X_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true } } : {}),
+        ...(TIKTOK_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostTikTok: true } } : {}),
         stage: sheetJobId ? pipelineProgress.get(sheetJobId) || null : null,
         stageStartedAt: sheetJobId ? pipelineStageStarted.get(sheetJobId) || null : null,
       }));
@@ -1207,9 +1276,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && reqUrl.pathname === '/api/run-pipeline') {
     let jobId = null;
     try {
-      let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
-      if (TIKTOK_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostTikTok = true; }
-      if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB)) throw new Error('Phiên này chỉ đăng Threads.');
+      let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), autoPostX = false, asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
+      if (TIKTOK_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostX = false; autoPostTikTok = true; }
+      if (X_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostTikTok = false; autoPostX = true; }
+      if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB || autoPostX)) throw new Error('Phiên này chỉ đăng Threads.');
       const tikTokConfig = autoPostTikTok ? readTikTokSlideshowConfig(slideshowConfig) : null;
       jobId = requestJobId;
       setPipelineProgress(jobId, 'Đang đọc nội dung Kuaishou…');
@@ -1333,15 +1403,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       const published = await publishPlatforms(
-        { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads },
+        { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads, autoPostX },
         { imagePaths: uploadPaths, videoPath: targetVideo, caption: finalCaption, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
-        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: customCaption?.trim() ? removeCaptionMentions(customCaption) : (tikTokConfig?.caption ?? args.caption) }), threads: postToThreads },
+        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: customCaption?.trim() ? removeCaptionMentions(customCaption) : (tikTokConfig?.caption ?? args.caption) }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }) },
         message => setPipelineProgress(jobId, message)
       );
 
       // Keep media when Threads needs a retry, without reposting other platforms.
       let cleanedUp = false;
-      if ((autoPostIG || autoPostFB || autoPostTikTok || autoPostThreads) && published.success && !published.skippedPlatforms?.length) {
+      if ((autoPostIG || autoPostFB || autoPostTikTok || autoPostThreads || autoPostX) && published.success && !published.skippedPlatforms?.length) {
         try {
           removeDownloadDirectory(outputDir);
           cleanedUp = true;

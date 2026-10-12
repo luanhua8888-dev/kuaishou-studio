@@ -1,5 +1,25 @@
 # Kuaishou Media Downloader & Multi-Platform Poster (No Watermark)
 
+## Đăng lên X (Twitter)
+
+X có công tắc riêng trong giao diện chính (`npm run ui`), nút **Đăng riêng lên X** trong kết quả và hỗ trợ hàng đợi Google Sheets. Công tắc X mặc định tắt để không tự thêm một đích đăng vào hàng đợi cũ.
+
+Chạy phiên X riêng bằng `npm run ui:x`, mở `http://localhost:3004`. Phiên này chỉ đăng X, lưu hàng đợi riêng trong `sheet-queue-x-state.json`. Nếu hai phiên cùng dùng một Google Sheet, chỉ bật hàng đợi ở một phiên tại một thời điểm vì chúng cùng xử lý và xóa các ô nguồn.
+
+Để kết nối tự động, cấu hình ứng dụng **Native App** trên [X Developer Console](https://developer.x.com/), lưu callback `http://127.0.0.1:3000/api/x/callback`, rồi đặt Client ID OAuth 2.0 vào `.x-client.json` theo mẫu `{ "clientId": "CLIENT_ID_CUA_BAN" }` (hoặc biến môi trường `X_CLIENT_ID`). Khởi động lại server, bấm trạng thái X → **Đăng nhập X**, đăng nhập và xác nhận quyền trên trang X. Callback phải khớp chính xác cổng đang dùng; phiên cổng 3004 cần callback `http://127.0.0.1:3004/api/x/callback` riêng.
+
+Ứng dụng dùng [OAuth 2.0 PKCE chính thức](https://docs.x.com/fundamentals/authentication/oauth-2-0/user-access-token), yêu cầu `tweet.read`, `tweet.write`, `users.read`, `media.write`, `offline.access`. Code xác thực được đổi lấy token tại server, kiểm tra tài khoản rồi lưu trên máy. Token được tự làm mới trước khi đăng khi gần hết hạn. Không cần Client Secret cho Native App. Quyền truy cập và tín dụng API được quản lý trong tài khoản Developer của bạn.
+
+Bạn vẫn có thể mở **Nhập token có sẵn** để nhập OAuth 2.0 User Access Token thủ công. Token nhập tay không được tự làm mới; App-only Bearer Token không dùng để đăng bài.
+
+Token được xác minh bằng API tài khoản trước khi lưu vào `x_auth.json` trên máy; file này và `.x-client.json` được Git bỏ qua. Trạng thái **Đã lưu kết nối** phản ánh token đã lưu, không kiểm tra lại token qua API mỗi 5 giây. Nếu X thu hồi quyền hoặc token không thể làm mới, đăng nhập lại.
+
+X nhận một video MP4 hoặc tối đa 4 ảnh JPG/PNG/WebP (mỗi ảnh tối đa 5 MB). Bật dựng Reel để chuyển bộ ảnh nhiều hơn 4 ảnh thành video; công cụ báo lỗi nếu vẫn phải gửi quá nhiều ảnh, không bỏ bớt ảnh âm thầm. Caption được kiểm tra theo cách đếm ký tự của X, gồm Unicode và URL. Caption tự sinh dài được rút gọn riêng cho X; caption tự nhập quá dài được báo lỗi để bạn sửa.
+
+Đăng media sử dụng [API upload v2 chính thức](https://docs.x.com/x-api/media/quickstart/media-upload-chunked), chờ xử lý rồi gọi API tạo bài đúng một lần. Chỉ báo thành công khi nhận mã bài đăng. Nếu X lỗi, hàng đợi giữ link và các kết quả đã đăng ở nền tảng khác. Hãy kiểm tra tài khoản nếu phản hồi đăng không rõ ràng trước khi thử lại. Bài đã xác nhận đăng thành công trên X được bỏ qua khi chạy lại cùng dòng.
+
+Kiểm thử bằng `npm test`. Sau khi mở phiên X ở cổng 3004, chạy `node verify-x-ui.mjs` để kiểm tra giao diện và chụp ảnh desktop/mobile trong `artifacts/`; lệnh này không đăng bài thật.
+
 ## Slideshow phong cảnh — đăng riêng TikTok
 
 Chạy `npm run ui:tiktok`, mở `http://localhost:3003`. Phiên này chỉ cho phép đăng TikTok, có trạng thái hàng đợi riêng và chặn các API đăng Instagram/Facebook/Threads. Hàng đợi chỉ chạy khi bạn bật Bắt đầu; phiên đa nền tảng đang chạy ở cổng khác vẫn hoạt động độc lập.

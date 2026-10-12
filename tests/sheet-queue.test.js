@@ -30,6 +30,26 @@ test('accepts only Kuaishou URLs', () => {
   assert.equal(rowLink('https://docs.google.com/example'), null);
 });
 
+test('queue retains an X failure and does not repost X after confirmed success', async t => {
+  const received = [];
+  const { queue, cleared } = fixture(t, ['https://v.kuaishou.com/x-retry'], async (_, options) => {
+    received.push(options);
+    return received.length === 1
+      ? { success: false, partialFailure: true, xPosted: true, threadsPosted: false, error: 'Threads failed' }
+      : { success: true, threadsPosted: true };
+  });
+  queue.configure({ options: { autoPostX: true } });
+  await queue.tick();
+  assert.equal(queue.snapshot().enabled, false);
+  assert.deepEqual(cleared, []);
+  queue.configure({ enabled: true });
+  await queue.tick();
+  assert.equal(received[0].autoPostX, true);
+  assert.equal(received[1].autoPostX, false);
+  assert.equal(queue.snapshot().items[0].published.xPosted, true);
+  assert.deepEqual(cleared, [1]);
+});
+
 test('Instagram file input timeout keeps the row and stops instead of claiming completion', async t => {
   const cells = ['https://v.kuaishou.com/no-input', 'https://v.kuaishou.com/next'];
   let attempts = 0;

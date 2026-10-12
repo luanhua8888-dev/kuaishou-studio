@@ -27,3 +27,8 @@ test_fonts.js
 test_*.png
 test_vn.txt
 launch-9router.ps1
+
+sheet-queue-x-state.json
+sheet-queue-x-state.json.tmp
+.x-client.json
+x_auth.json.tmp
