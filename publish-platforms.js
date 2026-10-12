@@ -16,6 +16,7 @@ export async function publishPlatforms(options, media, posters, progress = () =>
         result.skippedPlatforms = [options.autoPostIG && 'instagram', options.autoPostFB && 'facebook'].filter(Boolean);
         result.skipWarning = error.message;
         progress(error.message);
+        result.errors.push(`Instagram/Facebook: ${error.message}`);
       } else result.errors.push(`Instagram/Facebook: ${error.message}`);
     }
   }

@@ -914,7 +914,7 @@ const server = http.createServer(async (req, res) => {
   // Prepare local media for manual posts to Instagram, Facebook or Threads.
   if (req.method === 'POST' && ['/api/ig/post', '/api/fb/post', '/api/threads/post'].includes(reqUrl.pathname)) {
     try {
-      const { post, customCaption, shareToFacebook } = await readJsonBody(req);
+      const { post, customCaption, shareToFacebook, captionLang = 'vi' } = await readJsonBody(req);
       const isFbOnly = reqUrl.pathname === '/api/fb/post';
       const isThreadsOnly = reqUrl.pathname === '/api/threads/post';
       const doShareFB = isFbOnly || Boolean(shareToFacebook);
@@ -967,7 +967,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Call Playwright automation to post
-      const captionText = ensureCaptionHashtags(removeCaptionMentions(customCaption !== undefined ? customCaption : post.title), 'en', post.title);
+      let rawCaption = (customCaption !== undefined && customCaption.trim() !== '') ? customCaption.trim() : '';
+      if (!rawCaption) {
+        const generated = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, captionLang);
+        rawCaption = generated.fullText;
+      }
+      const captionText = ensureCaptionHashtags(removeCaptionMentions(rawCaption), captionLang, post.title);
       if (isThreadsOnly) {
         const result = await postToThreads({ imagePaths: uploadPaths, caption: buildThreadsCaption(captionText, 'en', { prompt: false }) });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1053,7 +1058,15 @@ const server = http.createServer(async (req, res) => {
         const jpgs = fs.readdirSync(outputDir).filter(f => f.endsWith('.jpg') && !f.includes('cover')).map(f => path.join(outputDir, f));
         if (jpgs.length > 0) {
           const audioPath = path.join(outputDir, 'audio.m4a');
-          const config = readTikTokSlideshowConfig(slideshowConfig);
+          const config = readTikTokSlideshowConfig({
+            ...slideshowConfig,
+            title: post.title,
+            moodQuote: post.moodQuote || post.moodQuoteVi || post.title,
+            author: post.author,
+            musicName: post.musicName,
+            musicArtist: post.musicArtist,
+            seed: post.photoId || post.originalUrl || post.title
+          });
           if (post.enableMoodQuote === false) config.sceneTexts = [];
           await createTikTokSlideshow(jpgs.sort(), fs.existsSync(audioPath) ? audioPath : null, tiktokReelPath, config);
           targetVideo = tiktokReelPath;
@@ -1099,8 +1112,23 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && reqUrl.pathname === '/api/sheet-column') {
     try {
-      const cells = await googleSheet.readColumn(readSettings(path.join(__dirname, '.setting')));
-      const rows = cells.map((value, index) => ({ row: index + 1, value: String(value) })).filter(item => item.value.trim());
+      const settings = readSettings(path.join(__dirname, '.setting'));
+      let rows;
+      if (typeof googleSheet.readRows === 'function') {
+        const allRows = await googleSheet.readRows(settings);
+        rows = allRows
+          .filter(item => item.colA || item.colB || item.colC)
+          .map(item => ({
+            row: item.row,
+            value: item.colA,
+            colA: item.colA,
+            colB: item.colB,
+            colC: item.colC
+          }));
+      } else {
+        const cells = await googleSheet.readColumn(settings);
+        rows = cells.map((value, index) => ({ row: index + 1, value: String(value), colA: String(value), colB: '', colC: false })).filter(item => item.value.trim());
+      }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ rows }));
     } catch (error) {
@@ -1108,6 +1136,39 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: error.message }));
     }
     return;
+  }
+
+  if (reqUrl.pathname === '/api/ai-settings') {
+    const settingPath = path.join(__dirname, '.setting');
+    if (req.method === 'GET') {
+      let geminiApiKey = '';
+      try {
+        if (fs.existsSync(settingPath)) {
+          const s = JSON.parse(fs.readFileSync(settingPath, 'utf8'));
+          geminiApiKey = s.geminiApiKey || s.aiApiKey || '';
+        }
+      } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ geminiApiKey, hasKey: Boolean(geminiApiKey) }));
+      return;
+    }
+    if (req.method === 'POST') {
+      try {
+        const body = await readJsonBody(req);
+        let settings = {};
+        if (fs.existsSync(settingPath)) {
+          try { settings = JSON.parse(fs.readFileSync(settingPath, 'utf8')); } catch {}
+        }
+        settings.geminiApiKey = String(body.geminiApiKey || '').trim();
+        fs.writeFileSync(settingPath, JSON.stringify(settings, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, hasKey: Boolean(settings.geminiApiKey) }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+      return;
+    }
   }
 
   if (reqUrl.pathname === '/api/sheet-queue') {
@@ -1248,7 +1309,15 @@ const server = http.createServer(async (req, res) => {
               try {
                 setPipelineProgress(jobId, 'Đang ghép video có caption cho TikTok…');
                 console.log('[TikTok] Đang dựng slideshow có chuyển động và câu chuyện từng cảnh...');
-                const config = { ...tikTokConfig };
+                const config = {
+                  ...tikTokConfig,
+                  title: post.title,
+                  moodQuote: finalMoodQuoteVi,
+                  author: post.author,
+                  musicName: post.musicName,
+                  musicArtist: post.musicArtist,
+                  seed: post.photoId || cleanUrl || post.title
+                };
                 if (!enableMoodQuote) config.sceneTexts = [];
                 await createTikTokSlideshow(localImagePaths, validAudio, tiktokReelPath, config);
                 targetVideo = tiktokReelPath;

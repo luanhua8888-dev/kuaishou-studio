@@ -1,7 +1,7 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { requestPipeline } from './pipeline-request.js';
+import { requestPipeline } from '../pipeline-request.js';
 
 test('waits for a delayed local result and preserves partial platform results', async t => {
   let received;

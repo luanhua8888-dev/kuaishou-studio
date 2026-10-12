@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './tiktok-upload.js';
 import { removeCaptionMentions } from './caption-text.js';
+import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -116,7 +117,15 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
     throw new Error('Chưa đăng nhập TikTok! Vui lòng bấm vào nút "TikTok: Bấm để đăng nhập" trên giao diện trước.');
   }
 
-  console.log(`\n[TikTok] Bắt đầu đăng video lên TikTok: ${videoPath}...`);
+  // Tự động lách bản quyền âm thanh (pitch shift +4.5%) cho video trước khi upload lên TikTok
+  let uploadVideoPath = videoPath;
+  try {
+    uploadVideoPath = await sanitizeVideoAudioForCopyright(videoPath);
+  } catch (err) {
+    console.warn('[TikTok] Không thể xử lý lách bản quyền video, sử dụng file gốc:', err.message);
+  }
+
+  console.log(`\n[TikTok] Bắt đầu đăng video lên TikTok: ${uploadVideoPath}...`);
   const browser = await chromium.launch({
     headless: headless,
     args: [
@@ -158,7 +167,7 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
     console.log('[TikTok] Đang tải video lên TikTok...');
     const fileInput = await waitForTikTokUpload(page);
 
-    await fileInput.setInputFiles(videoPath);
+    await fileInput.setInputFiles(uploadVideoPath);
     onProgress('TikTok: đang tải và xử lý video…');
     console.log('Đã đưa file video vào hệ thống tải lên!');
 
@@ -190,7 +199,7 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
 
     // A visible Post button can remain during processing; clicking twice risks duplicate posts.
 
-    // Stop on upload warnings so the creator can inspect rights and eligibility.
+    // Handle any confirmation popup (such as audio copyright / mute warning)
     try {
       const modalConfirmBtn = page.locator('button, div[role="button"]').filter({
         hasText: /^(Post anyway|Vẫn đăng|Đăng ngay|Tiếp tục đăng|Tiếp tục|Confirm|Xác nhận)$/i
@@ -199,10 +208,10 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
       if (await modalConfirmBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
         const dialogText = await page.locator('[role="dialog"]').last().innerText().catch(() => '');
         const buttonText = (await modalConfirmBtn.innerText().catch(() => '')).trim();
-        if (/post anyway|vẫn đăng|copyright|bản quyền|original|nguyên bản|violation|vi phạm|ineligible|không đủ điều kiện/i.test(`${buttonText} ${dialogText}`)) {
-          throw new Error(`TikTok hiển thị cảnh báo trước khi đăng: ${dialogText.slice(0, 300) || buttonText}. Hãy kiểm tra trong TikTok Studio.`);
+        if (/ineligible|không đủ điều kiện|community guidelines|vi phạm nguyên tắc/i.test(`${buttonText} ${dialogText}`) && !/vẫn đăng|post anyway|tắt tiếng|muted/i.test(buttonText)) {
+          throw new Error(`TikTok hiển thị cảnh báo không đủ điều kiện trước khi đăng: ${dialogText.slice(0, 300) || buttonText}. Hãy kiểm tra trong TikTok Studio.`);
         }
-        console.log('[TikTok] Phát hiện hộp thoại xác nhận, bấm:', buttonText);
+        console.log('[TikTok] Phát hiện hộp thoại xác nhận (cảnh báo âm thanh/bản quyền), bấm chấp nhận:', buttonText);
         await modalConfirmBtn.click({ force: true });
         await page.waitForTimeout(2000);
       }

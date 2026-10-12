@@ -1,7 +1,7 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { normalizeCaptionText, removeCaptionMentions, readJsonBody } from './caption-text.js';
+import { normalizeCaptionText, removeCaptionMentions, readJsonBody } from '../caption-text.js';
 
 test('removes account mentions from generated and custom captions', () => {
   assert.equal(removeCaptionMentions('Xem @creator và @shop.name #dulich'), 'Xem và #dulich');

@@ -1,10 +1,10 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
+import { sanitizeVideoAudioForCopyright } from '../anti-copyright.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 

@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
-import { waitForInstagramUpload } from './instagram-upload.js';
+import { openInstagramUpload } from './instagram-upload.js';
 import { confirmInstagramPost } from './instagram-confirmation.js';
+import { disableInstagramThreadsSharing } from './instagram-sharing.js';
 import { removeCaptionMentions } from './caption-text.js';
 import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
 import path from 'path';
@@ -234,28 +235,10 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
 
     // 2. Click "Create" (Tạo) button
     console.log('[Instagram] Đang mở modal tạo bài viết...');
-    const svg = page.locator('svg[aria-label="Bài viết mới"], svg[aria-label="New post"], svg[aria-label="Tạo"], svg[aria-label="Create"]').first();
-    const taoClickable = svg.locator('xpath=ancestor::*[@role="button" or @role="link" or self::a or self::div][position()<=3]').last();
-    if (await taoClickable.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await taoClickable.click({ force: true });
-    } else {
-      const createFallback = page.locator('span:has-text("Tạo"), span:has-text("Create")').first();
-      await createFallback.click({ force: true });
-    }
-    await page.waitForTimeout(1500);
-
-    // If sub-option "Post" / "Bài viết" appears, click it
-    const postMenuOption = page.locator('div, a, span').filter({ hasText: /^(Bài viết|Post)$/ }).last();
-    if (await postMenuOption.isVisible({ timeout: 3500 }).catch(() => false)) {
-      console.log('[Instagram] Chọn mục: Bài viết...');
-      await postMenuOption.click({ force: true });
-      await page.waitForTimeout(2000);
-    }
+    const fileInput = await openInstagramUpload(page);
 
     // 3. Upload files via file input
     console.log(`[Instagram] Đang tải lên ${sanitizedUploadPaths.length} file...`);
-    const fileInput = page.locator('input[type="file"]').first();
-    await waitForInstagramUpload(fileInput);
     await fileInput.setInputFiles(sanitizedUploadPaths);
     await page.waitForTimeout(4000);
 
@@ -263,12 +246,12 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     const okBtn = page.locator('button:has-text("OK"), button:has-text("Đã hiểu"), button:has-text("Tiếp tục")').first();
     if (await okBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       console.log('Dismissing Reels notification...');
-      await okBtn.click();
+      await okBtn.click({ force: true }).catch(() => {});
       await page.waitForTimeout(1500);
     }
 
     // Modal dialog container
-    const dialog = page.locator('div[role="dialog"]').first();
+    let dialog = page.locator('div[role="dialog"]').first();
     await dialog.waitFor({ state: 'visible', timeout: 15000 });
 
     // Chọn góc cắt "Nguyên bản" (Original) hoặc "4:5" để Instagram không tự động cắt vuông 1:1 làm mất chi tiết ảnh
@@ -277,12 +260,12 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
       const cropBtn = dialog.locator('svg[aria-label="Chọn góc cắt"], svg[aria-label="Select crop"]').first();
       const cropClickable = cropBtn.locator('xpath=ancestor::*[@role="button" or self::button][1]').first();
       if (await cropClickable.isVisible({ timeout: 4000 }).catch(() => false)) {
-        await cropClickable.click();
+        await cropClickable.click({ force: true });
         await page.waitForTimeout(800);
         const originalOption = page.locator('span, div, button').filter({ hasText: /^(Nguyên bản|Original|4:5)$/ }).first();
         if (await originalOption.isVisible({ timeout: 2000 }).catch(() => false)) {
           console.log('[Instagram] Đã chọn tỉ lệ:', (await originalOption.innerText().catch(() => 'Original')).trim());
-          await originalOption.click();
+          await originalOption.click({ force: true });
           await page.waitForTimeout(800);
         }
       }
@@ -302,16 +285,101 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     await nextBtn2.click({ force: true });
     await page.waitForTimeout(2500);
 
-    // 6. Enter Caption
-    if (caption) {
-      console.log('[Instagram] Đang nhập caption...');
-      const captionBox = dialog.locator('div[aria-label="Write a caption..."], div[aria-label="Viết chú thích..."], div[aria-label="Thêm chú thích..."], div[role="textbox"]').first();
-      await captionBox.waitFor({ state: 'visible', timeout: 10000 });
-      await captionBox.click({ force: true });
-      await page.keyboard.insertText(removeCaptionMentions(caption));
-      await page.waitForTimeout(1500);
-    }
+    // Follow the composer across rerenders to the final caption/share screen
+    dialog = page.getByRole('dialog').filter({ has: page.locator('[role="textbox"], [contenteditable="true"]') }).last();
+    await dialog.waitFor({ state: 'visible', timeout: 15000 });
 
+    // 6. Enter Caption & Hashtags
+    if (caption) {
+      const cleanCaption = removeCaptionMentions(caption);
+      console.log(`[Instagram/Facebook] Đang nhập mô tả và hashtag (${cleanCaption.length} ký tự)...`);
+      
+      const captionBox = dialog.locator(
+        'div[aria-label="Write a caption..."], ' +
+        'div[aria-label="Viết chú thích..."], ' +
+        'div[aria-label="Thêm chú thích..."], ' +
+        'div[aria-label*="caption" i], ' +
+        'div[aria-label*="chú thích" i], ' +
+        'div[role="textbox"][contenteditable="true"], ' +
+        'div[contenteditable="true"]'
+      ).first();
+      
+      await captionBox.waitFor({ state: 'visible', timeout: 15000 });
+      await captionBox.scrollIntoViewIfNeeded().catch(() => {});
+      await captionBox.click({ timeout: 5000 });
+      await page.waitForTimeout(300);
+
+      // Thử dùng fill() trước
+      let filled = false;
+      try {
+        await captionBox.fill(cleanCaption);
+        const current = (await captionBox.innerText().catch(() => '')).trim();
+        if (current.length > 0) filled = true;
+      } catch {}
+
+      // Nếu fill() chưa nhận, dùng keyboard gõ theo từng dòng (hỗ trợ xuống dòng Shift+Enter)
+      if (!filled) {
+        try {
+          await captionBox.click();
+          await page.keyboard.press('Control+A');
+          await page.keyboard.press('Backspace');
+          await page.waitForTimeout(200);
+
+          const lines = cleanCaption.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i]) {
+              await page.keyboard.insertText(lines[i]);
+            }
+            if (i < lines.length - 1) {
+              await page.keyboard.press('Shift+Enter');
+            }
+          }
+        } catch (err) {
+          console.warn('[Instagram/Facebook] Lỗi khi gõ keyboard, thử lại bằng insertText:', err.message);
+          await page.keyboard.insertText(cleanCaption);
+        }
+      }
+
+      await page.waitForTimeout(1000);
+      let actualText = (await captionBox.innerText().catch(() => '')).trim();
+
+      // Nếu vẫn trống chữ, sử dụng execCommand và dispatch input event trực tiếp vào DOM
+      if (!actualText) {
+        console.log('[Instagram/Facebook] Thử phương thức ép DOM execCommand để điền caption...');
+        await captionBox.evaluate((el, text) => {
+          el.focus();
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand('insertText', false, text);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, cleanCaption);
+        await page.waitForTimeout(1000);
+        actualText = (await captionBox.innerText().catch(() => '')).trim();
+      }
+
+      // Xác nhận các hashtag bắt buộc có trong nội dung
+      const expectedTags = cleanCaption.match(/#[\p{L}\p{N}_]+/gu) || [];
+      const missingTags = expectedTags.filter(tag => !actualText.includes(tag));
+      if (missingTags.length > 0) {
+        console.warn(`[Instagram/Facebook] Đang bổ sung ${missingTags.length} hashtag còn thiếu: ${missingTags.join(' ')}`);
+        await captionBox.click();
+        await page.keyboard.press('End');
+        await page.keyboard.press('Shift+Enter');
+        await page.keyboard.insertText(missingTags.join(' '));
+        await page.waitForTimeout(800);
+        actualText = (await captionBox.innerText().catch(() => '')).trim();
+      }
+
+      console.log(`[Instagram/Facebook] ✓ Đã xác nhận mô tả và hashtag trong ô nhập: "${actualText.slice(0, 80).replace(/\n/g, ' ')}..." (Tổng: ${actualText.length} ký tự).`);
+      
+      if (!actualText && cleanCaption.trim()) {
+        throw new Error('Không thể nhập mô tả và hashtag vào ô đăng bài của Instagram/Facebook! Dừng đăng để tránh bài viết bị trống chữ.');
+      }
+    }
     let facebookShared = false;
     // Configure Facebook sharing and retain its verified state separately from Instagram.
     try {
@@ -324,12 +392,12 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
 
       if ((await fbSwitch.count()) === 0 && await shareSection.isVisible({ timeout: 1500 }).catch(() => false)) {
         console.log('[Instagram] Mở rộng danh sách Chia sẻ lên...');
-        await shareSection.click();
+        await shareSection.click({ force: true });
         await page.waitForTimeout(1000);
         fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: page.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]') }).last();
         fbSwitch = fbRow.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]').last();
         if (await fbSwitch.count() === 0) {
-          await shareSection.locator('xpath=..').click();
+          await shareSection.locator('xpath=..').click({ force: true });
           await page.waitForTimeout(1000);
           fbRow = dialog.locator('div').filter({ hasText: /Facebook/i }).filter({ has: page.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]') }).last();
           fbSwitch = fbRow.locator('[role="switch"], [role="checkbox"], [aria-checked], input[type="checkbox"]').last();
@@ -343,7 +411,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
         if (shareToFacebook) {
           if (!isChecked) {
             console.log('[Instagram] Đang BẬT công tắc chia sẻ sang Facebook...');
-            await fbSwitch.click();
+            await fbSwitch.click({ force: true });
             await page.waitForTimeout(1500);
 
             // Kiểm tra modal xác nhận bật chia sẻ sang Facebook
@@ -352,7 +420,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
             }).first();
             if (await fbTurnOnModalBtn.isVisible({ timeout: 3500 }).catch(() => false)) {
               console.log('[Instagram] Xác nhận chia sẻ sang Facebook:', (await fbTurnOnModalBtn.innerText().catch(() => '')).trim());
-              await fbTurnOnModalBtn.click();
+              await fbTurnOnModalBtn.click({ force: true });
               await page.waitForTimeout(1000);
             }
           } else {
@@ -361,7 +429,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
         } else {
           if (isChecked) {
             console.log('[Instagram] Đang TẮT công tắc chia sẻ sang Facebook...');
-            await fbSwitch.click();
+            await fbSwitch.click({ force: true });
             await page.waitForTimeout(1000);
 
             // Kiểm tra nếu Instagram hỏi xác nhận "Dừng chia sẻ lên Facebook?"
@@ -370,7 +438,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
             }).first();
             if (await confirmBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
               console.log('[Instagram] Xác nhận dừng chia sẻ lên Facebook...');
-              await confirmBtn.click();
+              await confirmBtn.click({ force: true });
               await page.waitForTimeout(1000);
             }
           } else {
@@ -387,23 +455,22 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     }
 
     // Threads is posted independently. Disable native sharing when its own switch is present.
-    for (const toggle of await dialog.getByRole('switch').all()) {
-      const isThreads = await toggle.evaluate(element => {
-        if (/Threads/i.test(element.getAttribute('aria-label') || '')) return true;
-        let parent = element.parentElement;
-        for (let i = 0; parent && i < 5; i++, parent = parent.parentElement) {
-          const text = parent.innerText || '';
-          if (/Threads/i.test(text) && !/Facebook|Instagram/i.test(text) && parent.querySelectorAll('[role="switch"]').length === 1) return true;
-        }
-        return false;
-      });
-      if (isThreads && await toggle.evaluate(el => el.checked || el.getAttribute('aria-checked') === 'true')) {
-        await toggle.click();
-        if (await toggle.evaluate(el => el.checked || el.getAttribute('aria-checked') === 'true')) {
-          throw new Error('Không tắt được chia sẻ Threads trong Instagram; chưa đăng để tránh tạo bài trùng.');
-        }
-      }
+    await disableInstagramThreadsSharing(dialog);
+    await dialog.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Chờ các spinner / tiến trình cập nhật cấu hình chia sẻ biến mất hoàn toàn
+    await page.waitForTimeout(2000);
+    const spinner = dialog.locator('svg[aria-label="Đang tải"], svg[aria-label="Loading"], [role="progressbar"], div[class*="loading"], div[class*="spinner"]').first();
+    if (await spinner.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('[Instagram] Đang chờ tiến trình cấu hình chia sẻ hoàn tất...');
+      await spinner.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(1500);
     }
+
+    // 7. Click "Share" (Chia sẻ)
+    console.log('[Instagram] Đang kiểm tra nút Chia sẻ...');
+    const shareBtn = dialog.locator('div[role="button"], button').filter({ hasText: /^(Chia sẻ|Share)$/ }).last();
+    await shareBtn.waitFor({ state: 'visible', timeout: 10000 });
 
     if (prepareOnly) {
       await page.screenshot({ path: path.join(__dirname, 'ig_preflight.png') });
@@ -411,13 +478,9 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
       return { success: false, prepared: true, facebookShared };
     }
 
-    // 7. Click "Share" (Chia sẻ)
-    console.log('[Instagram] Đang bấm Đăng (Chia sẻ)...');
-    const shareBtn = dialog.locator('div[role="button"], button').filter({ hasText: /^(Chia sẻ|Share)$/ }).last();
-    await shareBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await shareBtn.scrollIntoViewIfNeeded().catch(() => {});
     // Video processing can exceed two minutes; submit once and observe confirmation.
-    await confirmInstagramPost(page, () => shareBtn.click());
+    console.log('[Instagram] Đang bấm Đăng (Chia sẻ)...');
+    await confirmInstagramPost(page, () => shareBtn.click({ timeout: 15000 }));
 
     console.log('[Instagram] Đăng bài lên Instagram thành công!');
     // Update cookies

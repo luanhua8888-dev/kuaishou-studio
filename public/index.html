@@ -34,9 +34,9 @@
     .sheet-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }
     .sheet-table th { text-align:left; background:var(--bg); font-weight:600; position:sticky; top:0; }
     .sheet-table th,.sheet-table td { padding:10px 16px; border-bottom:1px solid var(--card-border); }
-    .sheet-table th:first-child { width:64px; }
-    .sheet-table td:first-child { color:var(--text-muted); font-variant-numeric:tabular-nums; }
-    .sheet-table td:last-child { overflow-wrap:anywhere; }
+    .sheet-table th:first-child, .sheet-table td:first-child { width:48px; }
+    .sheet-table th:last-child, .sheet-table td:last-child { width:54px; text-align:center; }
+    .sheet-table td { overflow-wrap:anywhere; }
     .sheet-table tr.sheet-row-error td { background:#fff1f1; color:#a33838; border-bottom-color:#efd8d8; }
     .sheet-table tr.sheet-row-error a { color:#a33838; }
     .sheet-row-error-message { margin-top:6px; font-size:11px; line-height:1.5; color:#a33838; }
@@ -160,7 +160,7 @@
       <div class="section-heading"><div class="section-label"><span class="step-number">01</span><h2 id="sourceHeading">Nguồn nội dung</h2></div><span class="muted">Hàng đợi tự động</span></div>
       <div class="sheet-source">
         <div class="sheet-top"><div class="source-name"><span class="source-icon" aria-hidden="true">GS</span>Google Sheets</div><a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở bảng ↗</a></div>
-        <p class="helper">Cột A, mỗi dòng một link Kuaishou. Công cụ xử lý lần lượt theo lịch.</p>
+        <p class="helper">Cột A: Link cần đăng. Đăng thành công: tự động chuyển sang Cột B và tick Cột C.</p>
       </div>
       <div class="queue-footer">
         <div><div id="sheetStatus" aria-live="polite">Đang tải trạng thái…</div><div id="sheetCountdown" aria-live="off"></div></div>
@@ -200,17 +200,37 @@
         <div><label for="captionLangSelect" class="setting-label">Ngôn ngữ mô tả</label><select id="captionLangSelect"><option value="en" selected>Tiếng Anh</option><option value="vi">Tiếng Việt</option><option value="both">Anh + Việt</option><option value="raw">Tiếng Trung gốc</option></select></div>
         <div><label class="check-field"><input type="checkbox" id="chkAsReel" checked><span>Tạo video dọc từ bộ ảnh<br><span class="helper">Tỷ lệ 9:16, chuyển cảnh và ghép nhạc.</span></span></label></div>
       </div>
-      <div class="overlay-settings"><label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn câu chuyện lên video TikTok</span></label><p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video. Hàng đợi dùng câu chuyện trong cấu hình đã lưu.</p><div id="moodTextContainer"><label for="moodTextInput" class="field-label">Mỗi dòng một câu · để trống dùng câu chuyện mặc định</label><textarea id="moodTextInput" class="url-input" rows="4" placeholder="Nếu được đi trốn một ngày, mình muốn đến đây.&#10;Giữa thiên nhiên, mọi thứ như chậm lại…"></textarea></div></div>
+      <div class="overlay-settings">
+        <label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn câu chuyện lên video TikTok</span></label>
+        <p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video TikTok. Khi có Gemini AI, AI sẽ tự động đọc tiêu đề, ảnh và nhạc để viết câu chuyện riêng biệt cho từng bài.</p>
+        
+        <div style="margin-top:12px; padding:12px; background:var(--bg); border:1px solid var(--card-border); border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label for="geminiApiKeyInput" class="setting-label" style="margin:0; font-weight:600; font-size:12px;">Google Gemini AI Key (Miễn phí)</label>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size:11px; color:#3b6978; text-decoration:underline;">Lấy key miễn phí ↗</a>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán Gemini API Key (AIzaSy...)" style="margin:0; font-size:12px; padding:6px 10px; height:34px;">
+            <button type="button" id="btnSaveGeminiKey" class="btn btn-secondary" style="padding:0 12px; font-size:12px; white-space:nowrap;">Lưu Key</button>
+          </div>
+          <p id="geminiKeyStatus" class="helper" style="margin:6px 0 0; font-size:11px;">Đang kiểm tra kết nối AI…</p>
+        </div>
+
+        <div id="moodTextContainer" style="margin-top:12px;">
+          <label for="moodTextInput" class="field-label">Ghi đè câu chuyện thủ công (mỗi dòng một câu · để trống để AI tự sinh)</label>
+          <textarea id="moodTextInput" class="url-input" rows="3" placeholder="Để trống: AI Gemini sẽ tự động viết câu chuyện phù hợp từng video.&#10;Hoặc tự điền từng dòng nếu muốn dùng câu cố định."></textarea>
+        </div>
+      </div>
       <p class="help-note">Mỗi mô tả có 5 hashtag và tự loại bỏ @. Threads có thêm một chủ đề phù hợp. Khả năng được đề xuất còn phụ thuộc nội dung và trạng thái tài khoản.</p>
     </details>
     </div>
     <section class="card sheet-panel" aria-labelledby="sheetHeading">
       <div class="sheet-panel-header">
-        <div><h2 id="sheetHeading">Link từ cột A</h2><p class="helper" id="sheetRowCount">Google Sheets</p></div>
+        <div><h2 id="sheetHeading">Tiến độ bảng tính</h2><p class="helper" id="sheetRowCount">Google Sheets</p></div>
         <div class="sheet-tools"><button type="button" id="btnReloadSheet" class="btn">Tải lại bảng</button><a id="sheetExternalLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở riêng ↗</a></div>
       </div>
-      <div class="sheet-list" aria-live="polite"><table class="sheet-table" id="sheetTable" hidden><thead><tr><th>Dòng</th><th>Cột A</th></tr></thead><tbody id="sheetRows"></tbody></table><p class="sheet-list-message" id="sheetListMessage">Đang tải cột A…</p></div>
-      <p class="sheet-panel-note">Tự cập nhật mỗi 30 giây. Chọn “Mở riêng” để thêm hoặc sửa link.</p>
+      <div class="sheet-list" aria-live="polite"><table class="sheet-table" id="sheetTable" hidden><thead><tr><th style="width:48px;">Dòng</th><th>Cột A (Chờ)</th><th>Cột B (Đã đăng)</th><th style="width:54px;text-align:center;">Cột C</th></tr></thead><tbody id="sheetRows"></tbody></table><p class="sheet-list-message" id="sheetListMessage">Đang tải bảng Google Sheets…</p></div>
+      <p class="sheet-panel-note">Tự cập nhật mỗi 30 giây. Link hoàn tất sẽ tự chuyển sang Cột B và tick Cột C.</p>
     </section>
     </main>
     <div id="statusBox" class="status-box" role="status" aria-live="polite"></div>
@@ -332,7 +352,7 @@
           if (!message) {
             message = document.createElement('p');
             message.className = 'sheet-row-error-message';
-            row.lastElementChild.appendChild(message);
+            (row.children[1] || row.lastElementChild).appendChild(message);
           }
           const text = `Lỗi: ${failure.error || 'Chưa hoàn tất xử lý dòng này.'}`;
           if (message.textContent !== text) message.textContent = text;
@@ -367,38 +387,74 @@
       try {
         const response = await fetch('/api/sheet-column', { cache: 'no-store' });
         const data = await response.json();
-        if (!response.ok || !Array.isArray(data.rows)) throw new Error(data.error || 'Không tải được cột A');
+        if (!response.ok || !Array.isArray(data.rows)) throw new Error(data.error || 'Không tải được bảng Google Sheets');
         const rows = document.getElementById('sheetRows');
         rows.replaceChildren();
         for (const item of data.rows) {
           const row = document.createElement('tr');
           row.dataset.row = String(item.row);
-          row.dataset.value = item.value;
+          row.dataset.value = item.colA || item.value || '';
           const number = document.createElement('td');
           number.textContent = item.row;
-          const cell = document.createElement('td');
-          let url;
-          try { url = new URL(item.value.trim()); } catch {}
-          if (url && ['http:', 'https:'].includes(url.protocol)) {
-            const link = document.createElement('a');
-            link.href = url.href;
-            link.textContent = item.value;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            cell.appendChild(link);
-          } else { cell.textContent = item.value; }
-          row.append(number, cell);
+
+          // Cột A (Link chờ đăng)
+          const cellA = document.createElement('td');
+          if (item.colA) {
+            let urlA;
+            try { urlA = new URL(item.colA.trim()); } catch {}
+            if (urlA && ['http:', 'https:'].includes(urlA.protocol)) {
+              const link = document.createElement('a');
+              link.href = urlA.href;
+              link.textContent = item.colA;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              cellA.appendChild(link);
+            } else { cellA.textContent = item.colA; }
+          } else {
+            cellA.innerHTML = '<span style="color:var(--text-muted);font-style:italic;">—</span>';
+          }
+
+          // Cột B (Link đã đăng)
+          const cellB = document.createElement('td');
+          if (item.colB) {
+            let urlB;
+            try { urlB = new URL(item.colB.trim()); } catch {}
+            if (urlB && ['http:', 'https:'].includes(urlB.protocol)) {
+              const link = document.createElement('a');
+              link.href = urlB.href;
+              link.textContent = item.colB;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.style.color = '#356948';
+              cellB.appendChild(link);
+            } else { cellB.textContent = item.colB; }
+          } else {
+            cellB.innerHTML = '<span style="color:var(--text-muted);font-style:italic;">—</span>';
+          }
+
+          // Cột C (Tick)
+          const cellC = document.createElement('td');
+          cellC.style.textAlign = 'center';
+          if (item.colC) {
+            cellC.innerHTML = '<span style="color:#356948;font-weight:bold;font-size:14px;" title="Đã đăng thành công">✓</span>';
+          } else {
+            cellC.innerHTML = '<span style="color:#d8dde1;">—</span>';
+          }
+
+          row.append(number, cellA, cellB, cellC);
           rows.appendChild(row);
         }
         updateSheetRowErrors();
-        document.getElementById('sheetRowCount').textContent = `${data.rows.length} dòng có nội dung · Google Sheets`;
-        updateSheetReminder(data.rows.length);
+        const pendingCount = data.rows.filter(r => r.colA).length;
+        const doneCount = data.rows.filter(r => r.colC || r.colB).length;
+        document.getElementById('sheetRowCount').textContent = `${pendingCount} chờ · ${doneCount} đã đăng · Google Sheets`;
+        updateSheetReminder(pendingCount);
         document.getElementById('sheetTable').hidden = data.rows.length === 0;
         message.hidden = data.rows.length > 0;
-        message.textContent = 'Cột A đang trống. Mở bảng để thêm link.';
+        message.textContent = 'Bảng đang trống. Mở bảng để thêm link vào cột A.';
       } catch (error) {
         message.hidden = false;
-        message.textContent = `Không cập nhật được cột A: ${error.message}`;
+        message.textContent = `Không cập nhật được bảng: ${error.message}`;
       } finally { loadingSheetColumn = false; button.disabled = false; }
     }
     document.getElementById('btnReloadSheet').addEventListener('click', refreshSheetColumn);
@@ -508,10 +564,14 @@
       moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
       updateSwitchUI();
       updateSheetCountdown();
-      const latestWarning = data.items?.find(item => item.warning)?.warning;
+      const currentItem = data.items?.find(item => item.row === data.cursor);
+      const latestWarning = currentItem?.warning;
+      const queueMessage = data.running
+        ? `Đang xử lý dòng ${data.cursor} · ${data.stage || 'Đang chuẩn bị…'}${!data.enabled ? ' · Sẽ dừng sau dòng này' : ''}`
+        : data.enabled ? `Đang chờ · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng';
       sheetStatus.textContent = data.connectionError
         || data.error
-        || `${data.enabled ? `Đang chạy · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng'}${latestWarning ? ` · ${latestWarning}` : ''}`;
+        || `${queueMessage}${!data.running && latestWarning ? ` · ${latestWarning}` : ''}`;
     }
 
     async function refreshSheetQueue() {
@@ -554,6 +614,58 @@
     chkAddMoodText.addEventListener('change', () => {
       moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
     });
+
+    const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+    const btnSaveGeminiKey = document.getElementById('btnSaveGeminiKey');
+    const geminiKeyStatus = document.getElementById('geminiKeyStatus');
+
+    async function loadGeminiAiSettings() {
+      try {
+        const res = await fetch('/api/ai-settings');
+        const data = await res.json();
+        if (data.geminiApiKey) {
+          geminiApiKeyInput.value = data.geminiApiKey;
+          geminiKeyStatus.textContent = '✓ Đã kích hoạt Gemini AI! Mỗi video TikTok sẽ được AI tự động sáng tạo câu chuyện riêng.';
+          geminiKeyStatus.style.color = '#356948';
+        } else {
+          geminiKeyStatus.textContent = 'Chưa có Key (đang dùng bộ câu chuyện theo chủ đề có sẵn). Dán key để AI tự viết.';
+          geminiKeyStatus.style.color = 'var(--text-muted)';
+        }
+      } catch {}
+    }
+    loadGeminiAiSettings();
+
+    if (btnSaveGeminiKey) {
+      btnSaveGeminiKey.addEventListener('click', async () => {
+        btnSaveGeminiKey.disabled = true;
+        try {
+          const key = geminiApiKeyInput.value.trim();
+          const res = await fetch('/api/ai-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ geminiApiKey: key })
+          });
+          const data = await res.json();
+          if (data.success) {
+            if (key) {
+              geminiKeyStatus.textContent = '✓ Đã lưu thành công! Gemini AI đã sẵn sàng tự động viết câu chuyện TikTok.';
+              geminiKeyStatus.style.color = '#356948';
+              showStatus('Đã lưu Gemini API Key thành công!', 'success');
+            } else {
+              geminiKeyStatus.textContent = 'Đã xóa Key. Hệ thống sẽ dùng bộ câu chuyện theo bối cảnh có sẵn.';
+              geminiKeyStatus.style.color = 'var(--text-muted)';
+              showStatus('Đã gỡ Gemini API Key.', 'info');
+            }
+          } else {
+            throw new Error(data.error || 'Không thể lưu key');
+          }
+        } catch (err) {
+          showStatus(err.message, 'error');
+        } finally {
+          btnSaveGeminiKey.disabled = false;
+        }
+      });
+    }
     const statusBox = document.getElementById('statusBox');
     const resultSection = document.getElementById('resultSection');
     const authorAvatar = document.getElementById('authorAvatar');
@@ -1079,7 +1191,8 @@
               moodQuote: moodTextInput.value.trim(),
               enableMoodQuote: chkAddMoodText.checked
             },
-            customCaption: captionDisplay.value,
+            customCaption: captionDisplay.value.trim() || currentResult.caption,
+            captionLang: captionLangSelect.value,
             shareToFacebook: chkAutoPostFB.checked
           })
         });
@@ -1144,7 +1257,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             post: { ...currentResult.post, asReel: chkAsReel.checked },
-            customCaption: captionDisplay.value,
+            customCaption: captionDisplay.value.trim() || currentResult.caption,
+            captionLang: captionLangSelect.value,
             shareToFacebook: true
           })
         });

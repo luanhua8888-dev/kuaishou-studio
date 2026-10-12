@@ -151,7 +151,13 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
         return { prepared: true, caption: composed, topicAttached, topic };
       }
       // Keep the browser open while uploads finish, and observe before clicking.
-      await confirmThreadsPost(page, () => post.click());
+      await confirmThreadsPost(page, async () => {
+        try {
+          await post.click({ force: true });
+        } catch (e) {
+          await post.evaluate(el => el.click());
+        }
+      });
       await context.storageState({ path: AUTH_FILE });
       return { success: true, topicAttached, topic, message: 'Đã đăng trực tiếp lên Threads.' };
     } catch (error) {

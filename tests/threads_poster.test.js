@@ -1,6 +1,6 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareThreadsCaption, hasThreadsSession } from './threads_poster.js';
+import { prepareThreadsCaption, hasThreadsSession } from '../threads_poster.js';
 
 test('Threads rejects long captions and preserves emoji while removing mentions', () => {
   assert.equal(prepareThreadsCaption('Cảnh đẹp 🌿 @creator'), 'Cảnh đẹp 🌿');

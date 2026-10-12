@@ -1,6 +1,6 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { waitForTikTokUpload } from './tiktok-upload.js';
+import { waitForTikTokUpload } from '../tiktok-upload.js';
 
 function mockPage({ readyAfter = Infinity, error = false, url = 'https://www.tiktok.com/tiktokstudio/upload' } = {}) {
   const state = { waits: 0, reloads: 0, clicks: 0 };

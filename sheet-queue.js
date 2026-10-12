@@ -113,17 +113,19 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         try {
           const requested = { ...state.options };
           for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted']]) {
-            const platform = { igPosted: 'instagram', fbPosted: 'facebook', tiktokPosted: 'tiktok', threadsPosted: 'threads' }[flag];
-            if (entry.published?.[flag] || entry.skippedPlatforms?.includes(platform)) requested[option] = false;
+            if (entry.published?.[flag]) requested[option] = false;
           }
           const result = await runPipeline(url, requested);
           entry.skippedPlatforms = [...new Set([...(entry.skippedPlatforms || []), ...(result.skippedPlatforms || [])])];
           entry.skipWarning = result.skipWarning || entry.skipWarning || null;
-          entry.warning = [entry.skipWarning, result.threadsWarning].filter(Boolean).join(' ') || null;
           entry.published = { ...entry.published };
           for (const flag of ['igPosted', 'fbPosted', 'tiktokPosted', 'threadsPosted']) {
             entry.published[flag] = Boolean(entry.published[flag] || result[flag]);
           }
+          const publishedFlags = { instagram: 'igPosted', facebook: 'fbPosted', tiktok: 'tiktokPosted', threads: 'threadsPosted' };
+          entry.skippedPlatforms = entry.skippedPlatforms.filter(platform => !entry.published[publishedFlags[platform]]);
+          if (!entry.skippedPlatforms.length) entry.skipWarning = null;
+          entry.warning = [entry.skipWarning, result.threadsWarning].filter(Boolean).join(' ') || null;
           if (result.partialFailure) {
             entry.status = 'partial';
             entry.error = result.error || 'Một nền tảng chưa đăng thành công';
@@ -165,7 +167,11 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         entry.status = finalStatus; entry.updatedAt = new Date().toISOString();
         state.cursor++; state.blankCount = 0; save(); return;
       }
-      await sheet.clearCell(settings, row);
+      if (finalStatus === 'done' && typeof sheet.moveLinkAndCheck === 'function') {
+        await sheet.moveLinkAndCheck(settings, row, raw);
+      } else {
+        await sheet.clearCell(settings, row);
+      }
       entry.status = finalStatus; entry.updatedAt = new Date().toISOString();
       state.cursor++; state.blankCount = 0; save();
     } catch (error) { state.error = error.message; save(); }

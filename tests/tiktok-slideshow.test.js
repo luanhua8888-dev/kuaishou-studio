@@ -1,6 +1,6 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planSlideshow, wrapStory } from './tiktok-slideshow.js';
+import { planSlideshow, wrapStory } from '../tiktok-slideshow.js';
 
 test('duration includes dissolve overlaps, with exact 30fps boundaries', () => {
   for (const durationSeconds of [12, 13, 14, 15, 13.17]) {

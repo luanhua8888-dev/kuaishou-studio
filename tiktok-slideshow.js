@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 import { renderWithCache } from './render-cache.js';
+import { generateAIStoryScenes } from './ai-story.js';
 
 const run = promisify(execFile);
 const FPS = 30;
@@ -140,9 +141,21 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
   const plan = planSlideshow(candidates.length, config);
   const order = [hero, ...candidates.filter(i => i !== hero)].slice(0, plan.scenes.length);
   const selected = order.map(i => images[i]);
-  const story = config.sceneTexts ?? DEFAULT_STORY;
+  const story = config.sceneTexts !== undefined
+    ? config.sceneTexts
+    : await generateAIStoryScenes({
+        title: config.title,
+        moodQuote: config.moodQuote,
+        author: config.author,
+        musicName: config.musicName,
+        musicArtist: config.musicArtist,
+        sceneCount: plan.scenes.length,
+        seed: config.seed || config.title || config.moodQuote || outputPath,
+        apiKey: config.apiKey || config.geminiApiKey
+      });
   if (!Array.isArray(story) || story.some(t => typeof t !== 'string')) throw new Error('sceneTexts phải là mảng các câu chữ');
   if (config.sceneTexts && story.length > plan.scenes.length) throw new Error('sceneTexts có nhiều câu hơn số cảnh; tăng sceneCount/số ảnh hoặc rút gọn câu chuyện');
+  if (story.length) console.log('[TikTok Slideshow] Câu chữ từng cảnh theo bối cảnh:', story);
   // Story beats span the whole film, without repeating a sentence on each image.
   const texts = plan.scenes.map((_, i) => {
     const beat = Math.floor(i * story.length / plan.scenes.length);
@@ -151,7 +164,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
   });
   const layout = await layoutTexts(texts, config.text || {});
   const zoom = number(config.zoomAmount, 0.035, 0, 0.04, 'zoomAmount');
-  const volume = number(config.audio?.volume, 0.3, 0, 1, 'audio.volume');
+  const volume = number(config.audio?.volume, 1.0, 0, 1, 'audio.volume');
   const audioFade = Math.min(plan.duration / 2, number(config.audio?.fadeSeconds, 0.5, 0, 2, 'audio.fadeSeconds'));
   const hasAudio = Boolean(audioPath && fs.existsSync(audioPath));
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });

@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './tiktok-upload.js';
+import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from '../tiktok-upload.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });
@@ -60,8 +60,8 @@ test('waits until both visible checks complete and reports progress', async () =
   await fixture('<div class="status-result status-checking" id="music">Checking...</div><div class="status-result status-checking" id="content">Đang kiểm tra.</div>', async page => {
     const progress = [];
     await page.evaluate(() => {
-      setTimeout(() => { document.querySelector('#music').className = 'status-result status-success'; document.querySelector('#music').textContent = 'Passed'; }, 20);
-      setTimeout(() => { document.querySelector('#content').className = 'status-result status-success'; document.querySelector('#content').textContent = 'Passed'; }, 80);
+      setTimeout(() => { document.querySelector('#music').className = 'status-result status-success'; document.querySelector('#music').textContent = 'Passed'; }, 80);
+      setTimeout(() => { document.querySelector('#content').className = 'status-result status-success'; document.querySelector('#content').textContent = 'Passed'; }, 200);
     });
     await waitForTikTokChecks(page, { timeoutMs: 1000, delayMs: 10, onProgress: message => progress.push(message) });
     assert.match(await page.locator('#content').innerText(), /Passed/);

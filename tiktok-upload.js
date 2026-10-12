@@ -1,5 +1,5 @@
 // Retry only before selecting a video; never retry a publish action.
-export async function waitForTikTokChecks(page, { timeoutMs = 180000, delayMs = 1000, onProgress = () => {} } = {}) {
+export async function waitForTikTokChecks(page, { timeoutMs = 180000, delayMs = 1000, onProgress = () => {}, allowMutedCopyright = true } = {}) {
   const started = Date.now();
   let reportedAt = -Infinity;
   for (;;) {
@@ -13,18 +13,24 @@ export async function waitForTikTokChecks(page, { timeoutMs = 180000, delayMs = 
         return element.getClientRects().length && style.visibility !== 'hidden' && style.display !== 'none'
           && !element.closest('[data-show="false"], [aria-hidden="true"]');
       }).map(element => ({ text: element.innerText.trim(), pending: element.classList.contains('status-checking'),
-        blocked: element.classList.contains('status-error') || element.classList.contains('status-warn') })));
+        blocked: element.classList.contains('status-error') || element.classList.contains('status-warn'),
+        isMuteWarn: /tắt tiếng|bị tắt tiếng|vẫn có thể đăng|muted|sound will be muted|mute/i.test(element.innerText.trim())
+      })));
       states.push(...results);
       const fallback = await frame.getByText(/^(Đang kiểm tra|Checking)(?:[.\s…]|$)/i).evaluateAll(elements => elements
         .filter(element => element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden'
           && !element.closest('[data-show="false"], [aria-hidden="true"], [contenteditable="true"], [role="textbox"]'))
-        .map(element => ({ text: element.innerText.trim(), pending: true, blocked: false })));
+        .map(element => ({ text: element.innerText.trim(), pending: true, blocked: false, isMuteWarn: false })));
       states.push(...fallback.filter(state => !states.some(existing => existing.text === state.text)));
     }
-    const blocked = states.find(state => state.blocked || /đạt giới hạn|daily limit|limit reached/i.test(state.text));
+    const blocked = states.find(state => (state.blocked && !(allowMutedCopyright && state.isMuteWarn)) || /đạt giới hạn|daily limit|limit reached/i.test(state.text));
     if (blocked) throw new Error(`TikTok không hoàn tất kiểm tra: ${blocked.text || 'Có cảnh báo bản quyền/nội dung'}. Video chưa được bấm Đăng; kiểm tra trong TikTok Studio.`);
+    const muteWarning = states.find(state => state.isMuteWarn);
+    if (muteWarning) {
+      console.log(`[TikTok] Phát hiện cảnh báo âm thanh bản quyền: "${muteWarning.text}". Tiếp tục đăng theo chính sách cho phép.`);
+    }
     const pending = states.filter(state => state.pending);
-    if (!pending.length) return { checksPending: false };
+    if (!pending.length) return { checksPending: false, warning: muteWarning?.text };
     const elapsed = Date.now() - started;
     if (elapsed >= timeoutMs) {
       onProgress(`TikTok: kiểm tra chưa xong sau ${Math.round(timeoutMs / 60000)} phút; tiếp tục bấm Đăng…`);
@@ -42,12 +48,28 @@ export async function fillTikTokCaption(page, caption) {
   const text = String(caption || '');
   const box = page.locator('div[contenteditable="true"]:visible, div[data-e2e="caption-input"]:visible').first();
   await box.waitFor({ state: 'visible', timeout: 30000 });
+
+  // Clear any pre-filled filename or placeholder
+  try {
+    await box.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.waitForTimeout(200);
+  } catch {}
+
   await box.fill(text);
   // Close hashtag suggestions and commit the editable field before submitting.
   await box.press('Escape');
   await box.press('Tab');
   const normalize = value => value.replace(/\s+/g, ' ').trim();
-  if (normalize(await box.innerText()) !== normalize(text)) {
+  const currentText = normalize(await box.innerText());
+  const expectedText = normalize(text);
+
+  if (currentText !== expectedText) {
+    if (currentText.includes(expectedText) || currentText.endsWith(expectedText)) {
+      console.log('[TikTok] Mô tả và hashtag đã được nhập vào editor.');
+      return;
+    }
     throw new Error('TikTok không giữ đúng mô tả/hashtag sau khi nhập. Video chưa được bấm Đăng.');
   }
 }

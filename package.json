@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node download_kuaishou.js",
+    "test": "node --test tests/*.test.js",
     "ui": "node server.js",
     "ui:threads": "node server.js --port=3001 --threads-only",
     "ui:tiktok": "node server.js --port=3003 --tiktok-only",

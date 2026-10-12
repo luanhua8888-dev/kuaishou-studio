@@ -31,9 +31,12 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
     return token;
   }
 
-  async function api(settings, endpoint, method = 'GET') {
+  async function api(settings, endpoint, method = 'GET', body = null) {
+    const headers = { Authorization: `Bearer ${await accessToken(settings)}` };
+    if (body) headers['Content-Type'] = 'application/json';
     const response = await fetchImpl(endpoint, {
-      method, headers: { Authorization: `Bearer ${await accessToken(settings)}` },
+      method, headers,
+      body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000)
     });
     const data = await response.json();
@@ -57,10 +60,33 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
       const data = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(range)}`);
       return (data.values || []).map(row => row[0] || '');
     },
+    async readRows(settings) {
+      const title = await sheetTitle(settings);
+      const range = `'${title.replace(/'/g, "''")}'!A:C`;
+      const data = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(range)}`);
+      return (data.values || []).map((row, index) => ({
+        row: index + 1,
+        colA: String(row[0] || '').trim(),
+        colB: String(row[1] || '').trim(),
+        colC: row[2] === true || String(row[2] || '').trim().toUpperCase() === 'TRUE' || row[2] === '✓',
+        colD: row[3] === true || String(row[3] || '').trim().toUpperCase() === 'TRUE' || row[3] === '✓'
+      }));
+    },
     async clearCell(settings, row) {
       const title = await sheetTitle(settings);
       const range = `'${title.replace(/'/g, "''")}'!A${row}`;
       await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(range)}:clear`, 'POST');
+    },
+    async moveLinkAndCheck(settings, row, link) {
+      const title = await sheetTitle(settings);
+      const safeTitle = `'${title.replace(/'/g, "''")}'`;
+      const rangeA = `${safeTitle}!A${row}`;
+      await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeA)}:clear`, 'POST');
+      const rangeBC = `${safeTitle}!B${row}:C${row}`;
+      await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeBC)}?valueInputOption=USER_ENTERED`, 'PUT', {
+        range: rangeBC,
+        values: [[link, true]]
+      });
     }
   };
 }

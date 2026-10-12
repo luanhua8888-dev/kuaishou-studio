@@ -1,9 +1,9 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { renderWithCache } from './render-cache.js';
+import { renderWithCache } from '../render-cache.js';
 
 test('reuses a completed render and invalidates changed caption, source, or output', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-cache-'));
