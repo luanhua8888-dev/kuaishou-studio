@@ -1,7 +1,7 @@
 ﻿import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { confirmInstagramPost, INSTAGRAM_CONFIRMATION_TIMEOUT_MS } from '../instagram-confirmation.js';
+import { confirmInstagramPost, INSTAGRAM_CONFIRMATION_TIMEOUT_MS } from '../src/platforms/instagram/confirmation.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });

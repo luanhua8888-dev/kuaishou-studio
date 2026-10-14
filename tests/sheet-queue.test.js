@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createSheetQueue, rowLink } from '../sheet-queue.js';
-import { publishPlatforms } from '../publish-platforms.js';
-import { waitForInstagramUpload } from '../instagram-upload.js';
+import { createSheetQueue, rowLink } from '../src/queue/sheet-queue.js';
+import { publishPlatforms } from '../src/platforms/publish.js';
+import { waitForInstagramUpload } from '../src/platforms/instagram/upload.js';
 
 function fixture(t, cells, pipeline = async () => ({ success: true })) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
@@ -108,6 +108,50 @@ test('keeps the row and stops after a network failure without clearing or replay
   assert.deepEqual(cleared, []);
   assert.equal(calls.length, 1);
   assert.equal(cells[0], 'https://v.kuaishou.com/network');
+});
+
+test('retries a confirmed preparation failure on the next tick and keeps the link until success', async t => {
+  let attempts = 0;
+  const { queue, cleared } = fixture(t, ['https://v.kuaishou.com/preparation'], async () => {
+    if (++attempts === 1) throw Object.assign(new Error('CDN timeout'), { code: 'NETWORK_READ_FAILED', failureStage: 'prepare' });
+    return { success: true };
+  });
+  await queue.tick();
+  assert.equal(queue.snapshot().enabled, true);
+  assert.equal(queue.snapshot().cursor, 1);
+  assert.equal(queue.snapshot().items[0].status, 'pending');
+  assert.match(queue.snapshot().error, /chưa tới bước đăng/);
+  assert.deepEqual(cleared, []);
+  await queue.tick();
+  assert.equal(attempts, 2);
+  assert.deepEqual(cleared, [1]);
+  assert.equal(queue.snapshot().items[0].prepareFailures, 0);
+});
+
+test('bounds preparation retries and resets their budget on a manual restart', async t => {
+  const { queue, cleared, calls } = fixture(t, ['https://v.kuaishou.com/unavailable'], async () => {
+    throw Object.assign(new Error('CDN timeout'), { code: 'NETWORK_READ_FAILED', failureStage: 'prepare' });
+  });
+  for (let i = 0; i < 5; i++) await queue.tick();
+  assert.equal(calls.length, 4);
+  assert.equal(queue.snapshot().enabled, false);
+  assert.equal(queue.snapshot().cursor, 1);
+  assert.deepEqual(cleared, []);
+  queue.configure({ enabled: true });
+  await queue.tick();
+  assert.equal(queue.snapshot().enabled, true);
+  assert.equal(queue.snapshot().items[0].prepareFailures, 1);
+});
+
+test('never automatically retries a network error after publishing has begun', async t => {
+  const { queue, calls, cleared } = fixture(t, ['https://v.kuaishou.com/publishing'], async () => {
+    throw Object.assign(new Error('socket closed'), { code: 'NETWORK_READ_FAILED', failureStage: 'publish' });
+  });
+  await queue.tick();
+  await queue.tick();
+  assert.equal(queue.snapshot().enabled, false);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(cleared, []);
 });
 
 test('keeps a link after partial failure and retries only the missing platform', async t => {

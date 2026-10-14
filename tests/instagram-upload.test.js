@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { waitForInstagramUpload, UPLOAD_INPUT_UNAVAILABLE } from '../instagram-upload.js';
+import { waitForInstagramUpload, UPLOAD_INPUT_UNAVAILABLE } from '../src/platforms/instagram/upload.js';
 
 test('missing Instagram upload input reports that Instagram/Facebook have not posted', async () => {
   const error = new Error('locator.waitFor: Timeout 20000ms exceeded');

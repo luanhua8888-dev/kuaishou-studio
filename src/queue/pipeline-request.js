@@ -15,7 +15,12 @@ export function requestPipeline(port, payload) {
       res.on('end', () => {
         try {
           const result = JSON.parse(text);
-          if (res.statusCode >= 400) throw new Error(result.error || `HTTP ${res.statusCode}`);
+          if (res.statusCode >= 400) {
+            const error = new Error(result.error || `HTTP ${res.statusCode}`);
+            error.code = result.code;
+            error.failureStage = result.failureStage;
+            throw error;
+          }
           resolve(result);
         } catch (error) { reject(error); }
       });

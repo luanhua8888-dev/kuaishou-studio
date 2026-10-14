@@ -1,5 +1,28 @@
 # Kuaishou Media Downloader & Multi-Platform Poster (No Watermark)
 
+## Cấu trúc dự án
+
+```text
+server.js             Điểm khởi động tương thích với lệnh/shortcut hiện có
+src/
+  server.js           HTTP API và quy trình xử lý bài
+  paths.js            Đường dẫn gốc dùng chung, không phụ thuộc thư mục terminal
+  content/            Caption, hashtag và nội dung AI
+  kuaishou/           Đọc dữ liệu bài Kuaishou
+  media/              Tải, xử lý, dựng video và cache
+  network/            HTTP có timeout và thử lại
+  platforms/          Đăng bài: instagram/, tiktok/, threads/, x/
+  queue/              Google Sheets và hàng đợi
+scripts/              CLI tải media, đăng nhập, render mẫu và kiểm tra giao diện
+config/               Cấu hình mẫu
+public/               Giao diện web
+tests/                Kiểm thử tự động
+downloads/            Media tải về (không đưa lên Git)
+artifacts/            Kết quả kiểm tra (không đưa lên Git)
+```
+
+Các lệnh `npm run ui`, `npm start`, `npm test` và shortcut `open-kuaishou.ps1` vẫn là điểm vào chính. Cấu hình đang dùng (`.setting`, `tiktok-slideshow.config.json`), khóa Google, phiên đăng nhập và trạng thái hàng đợi nằm ở thư mục gốc để tiếp tục dùng dữ liệu hiện có. Không đặt dữ liệu chạy trong `src/`.
+
 ## Đăng lên X (Twitter)
 
 X có công tắc riêng trong giao diện chính (`npm run ui`), nút **Đăng riêng lên X** trong kết quả và hỗ trợ hàng đợi Google Sheets. Công tắc X mặc định tắt để không tự thêm một đích đăng vào hàng đợi cũ.
@@ -18,7 +41,7 @@ X nhận một video MP4 hoặc tối đa 4 ảnh JPG/PNG/WebP (mỗi ảnh tố
 
 Đăng media sử dụng [API upload v2 chính thức](https://docs.x.com/x-api/media/quickstart/media-upload-chunked), chờ xử lý rồi gọi API tạo bài đúng một lần. Chỉ báo thành công khi nhận mã bài đăng. Nếu X lỗi, hàng đợi giữ link và các kết quả đã đăng ở nền tảng khác. Hãy kiểm tra tài khoản nếu phản hồi đăng không rõ ràng trước khi thử lại. Bài đã xác nhận đăng thành công trên X được bỏ qua khi chạy lại cùng dòng.
 
-Kiểm thử bằng `npm test`. Sau khi mở phiên X ở cổng 3004, chạy `node verify-x-ui.mjs` để kiểm tra giao diện và chụp ảnh desktop/mobile trong `artifacts/`; lệnh này không đăng bài thật.
+Kiểm thử bằng `npm test`. Sau khi mở phiên X ở cổng 3004, chạy `node scripts/verify-x-ui.mjs` để kiểm tra giao diện và chụp ảnh desktop/mobile trong `artifacts/`; lệnh này không đăng bài thật.
 
 ## Slideshow phong cảnh — đăng riêng TikTok
 
@@ -45,11 +68,10 @@ Chỉnh `tiktok-slideshow.config.json` rồi chạy lượt mới (không cần 
 
 API `/api/tiktok/post` và `/api/run-pipeline` nhận thêm `slideshowConfig` để ghi đè cấu hình cho từng lượt. Trên giao diện, nhập mỗi dòng một câu cho link chạy thủ công/đăng lại TikTok; để trống dùng cấu hình mặc định. Hàng đợi đọc câu chuyện từ file cấu hình. Công tắc chèn chữ tắt sẽ xuất không chữ; câu tâm trạng đơn cũ không còn lặp trên slideshow TikTok. Phần dựng Instagram/Facebook vẫn dùng bộ dựng riêng trước đó.
 
-Ví dụ bốn câu và caption bạn cung cấp nằm trong `tiktok-slideshow.norway.example.json`. Đây là mẫu cấu hình; chỉ dùng tên Na Uy khi ảnh thực tế đúng địa điểm. Render kiểm tra bằng `npm run render:tiktok` hoặc:
+Ví dụ bốn câu và caption bạn cung cấp nằm trong `config/tiktok-slideshow.norway.example.json`. Đây là mẫu cấu hình; chỉ dùng tên Na Uy khi ảnh thực tế đúng địa điểm. Render kiểm tra bằng `npm run render:tiktok` hoặc:
 
 ```powershell
-node render-tiktok-sample.mjs "downloads/thu-muc-anh" "tiktok-slideshow.norway.example.json" "artifacts/tiktok-landscape-sample.mp4"
-node verify-tiktok-slideshow.mjs "artifacts/tiktok-landscape-sample.mp4"
+node scripts/render-tiktok-sample.mjs "downloads/thu-muc-anh" "config/tiktok-slideshow.norway.example.json" "artifacts/tiktok-landscape-sample.mp4"
 ```
 
 Lệnh render không đăng bài. Video mẫu và caption nằm trong `artifacts/`; khung đầu/giữa/cuối và mọi điểm chuyển cảnh nằm trong `artifacts/slideshow-qa/`. Bộ dựng lưu `.story.json` để đối chiếu thứ tự ảnh, thời gian và chữ. Thay cấu hình/ảnh/font làm cache mất hiệu lực. Các thay đổi nhằm cải thiện khả năng đọc và trải nghiệm xem, không bảo đảm lượt xem hoặc khắc phục hạn chế phân phối.
@@ -78,7 +100,7 @@ Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (Q
 
 ## Cách sử dụng
 
-Trước khi chạy, cài dependencies bằng `npm install`, sao chép `.setting.example` thành `.setting`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `google-service-account.json`. Các tệp `.setting`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
+Trước khi chạy, cài dependencies bằng `npm install`, sao chép `config/settings.example.json` thành `.setting`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `google-service-account.json`. Các tệp `.setting`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
 
 ### 1. Sử dụng Giao diện Web (UI Trực Quan - Khuyên dùng)
 Chạy lệnh:
@@ -96,7 +118,7 @@ npm run ui
 ### 2. Sử dụng dòng lệnh Terminal (CLI)
 ```bash
 npm start
-# hoặc: node download_kuaishou.js
+# hoặc: node scripts/download.mjs
 ```
 Tool sẽ hiện nhắc:
 ```text
@@ -109,12 +131,12 @@ Bạn chỉ cần dán link vào và bấm `Enter`, tải xong có thể dán ti
 
 ### 3. Tải nhanh bằng cách truyền link trực tiếp qua dòng lệnh
 ```bash
-node download_kuaishou.js "https://v.kuaishou.com/KzRiYcFY"
+node scripts/download.mjs "https://v.kuaishou.com/KzRiYcFY"
 ```
 
 Bạn cũng có thể tải cùng lúc nhiều link:
 ```bash
-node download_kuaishou.js "link_1" "link_2" "link_3"
+node scripts/download.mjs "link_1" "link_2" "link_3"
 ```
 
 ---
@@ -151,8 +173,8 @@ https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJ
 - Chỉnh `intervalSeconds` trong file `.setting` để đặt thời gian chờ giữa hai lượt (đơn vị giây, tối thiểu 5; 1800 giây = 30 phút). Đây là khoảng nghỉ sau khi xử lý xong, không phải thời gian xử lý một bài. Mỗi lượt chỉ xử lý một link. Xử lý thành công sẽ xóa **ô ở cột A** của dòng đó.
 - Dòng trống được bỏ qua trong cùng lượt quét. Khi hết link trong cột A, ứng dụng tự dừng. Bấm **Bắt đầu** để quét lại từ A1 nếu đã thêm link mới.
 - Để có quyền xóa ô, bật Google Sheets API cho project của service account và chia sẻ bảng cho `lun-83@loginwithjavascript.iam.gserviceaccount.com` với quyền **Người chỉnh sửa**. Khóa JSON hiện được chỉ định trong `.setting`.
-- Các lựa chọn Instagram, TikTok, Facebook và ngôn ngữ caption trong giao diện cũng áp dụng cho hàng đợi. Lỗi tải mạng hoặc lỗi đăng từng nền tảng sẽ giữ nguyên ô và dừng để bạn kiểm tra trước khi bấm **Bắt đầu** thử lại; nền tảng đã xác nhận thành công được bỏ qua. Link không hợp lệ và các lỗi xử lý khác được ghi lại rồi xóa ô để tiếp tục hàng đợi. Nếu Google Sheets chưa xóa được ô sau khi xử lý thành công, ứng dụng sẽ thử xóa lại mà không chạy lại link.
-- Khi xử lý, giao diện hiển thị bước hiện tại và thời gian của bước đó. Ảnh được tải tối đa 3 ảnh cùng lúc; video đã tạo được dùng lại khi thử lại nếu ảnh, nhạc và nội dung chữ không đổi. Phần tải từ mạng có giới hạn thời gian và thử lại tối đa 2 lần; thao tác đăng bài không được tự động phát lại.
+- Các lựa chọn Instagram, TikTok, Facebook và ngôn ngữ caption trong giao diện cũng áp dụng cho hàng đợi. Lỗi tải mạng được xác nhận xảy ra trước bước đăng sẽ giữ nguyên ô và tự thử lại tối đa 3 lượt theo `intervalSeconds`. Lỗi đăng hoặc lỗi chưa xác định được bước xảy ra sẽ dừng để bạn kiểm tra trước khi bấm **Bắt đầu** thử lại; nền tảng đã xác nhận thành công được bỏ qua. Link không hợp lệ và các lỗi xử lý khác được ghi lại rồi xóa ô để tiếp tục hàng đợi. Nếu Google Sheets chưa xóa được ô sau khi xử lý thành công, ứng dụng sẽ thử xóa lại mà không chạy lại link.
+- Khi xử lý, giao diện hiển thị bước hiện tại và thời gian của bước đó. Ảnh được tải tối đa 3 ảnh cùng lúc; video đã tạo được dùng lại khi thử lại nếu ảnh, nhạc và nội dung chữ không đổi. Video và nhạc được ghi dần xuống file tạm, chỉ timeout khi không nhận dữ liệu trong 30 giây, với giới hạn tổng 30 phút. Khi kết nối đứt, ứng dụng tải tiếp nếu CDN hỗ trợ xác nhận cùng phiên bản file, hoặc thử URL dự phòng do Kuaishou cung cấp. Chỉ file tải hoàn chỉnh được dùng để đăng; thao tác đăng bài không được tự động phát lại khi chưa rõ kết quả.
 
 ---
 

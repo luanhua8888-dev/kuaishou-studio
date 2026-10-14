@@ -1,7 +1,7 @@
 ﻿import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { disableInstagramThreadsSharing } from '../instagram-sharing.js';
+import { disableInstagramThreadsSharing } from '../src/platforms/instagram/sharing.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });

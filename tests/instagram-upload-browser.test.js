@@ -1,7 +1,7 @@
 ﻿import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { openInstagramUpload } from '../instagram-upload.js';
+import { openInstagramUpload } from '../src/platforms/instagram/upload.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });

@@ -116,6 +116,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
             if (entry.published?.[flag]) requested[option] = false;
           }
           const result = await runPipeline(url, requested);
+          entry.prepareFailures = 0;
           entry.skippedPlatforms = [...new Set([...(entry.skippedPlatforms || []), ...(result.skippedPlatforms || [])])];
           entry.skipWarning = result.skipWarning || entry.skipWarning || null;
           entry.published = { ...entry.published };
@@ -139,6 +140,18 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           entry.status = 'awaiting_clear'; entry.error = null;
           entry.updatedAt = new Date().toISOString(); save();
         } catch (error) {
+          if (error.code === 'NETWORK_READ_FAILED' && error.failureStage === 'prepare') {
+            entry.prepareFailures = (entry.prepareFailures || 0) + 1;
+            const willRetry = entry.prepareFailures <= 3;
+            entry.status = willRetry ? 'pending' : 'partial';
+            entry.error = error.message;
+            entry.updatedAt = new Date().toISOString();
+            if (!willRetry) state.enabled = false;
+            state.error = `Dòng ${row}: ${entry.error}. Lần này chưa tới bước đăng; link được giữ lại. ` +
+              (willRetry ? `Sẽ tự thử lại sau ${settings.intervalSeconds} giây (${entry.prepareFailures}/3).` : 'Đã hết 3 lần tự thử lại; bấm Bắt đầu để tiếp tục.');
+            save();
+            return;
+          }
           if (error.code === 'NETWORK_READ_FAILED' || /fetch failed|Không tải được|ECONN|ETIMEDOUT|socket|aborted/i.test(error.message)) {
             entry.status = 'partial'; entry.error = error.message;
             entry.updatedAt = new Date().toISOString();
@@ -187,7 +200,10 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       const startNow = enabled === true && !wasEnabled && runNow && !busy;
       if (typeof enabled === 'boolean') {
         state.enabled = enabled;
-        if (enabled && !wasEnabled && ['failed', 'interrupted', 'partial'].includes(state.items[String(state.cursor)]?.status)) state.items[String(state.cursor)].status = 'pending';
+        if (enabled && !wasEnabled && ['failed', 'interrupted', 'partial'].includes(state.items[String(state.cursor)]?.status)) {
+          state.items[String(state.cursor)].status = 'pending';
+          state.items[String(state.cursor)].prepareFailures = 0;
+        }
         if (startNow) state.cursor = 1;
         if (enabled) { state.error = null; state.blankCount = 0; }
       }
@@ -202,6 +218,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         state.error = null;
         if (['failed', 'interrupted', 'partial'].includes(state.items[String(state.cursor)]?.status)) {
           state.items[String(state.cursor)].status = 'pending';
+          state.items[String(state.cursor)].prepareFailures = 0;
         }
         if (timer) { clearTimeout(timer); timer = null; }
         nextRunAt = null;

@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPostPage, findPhotoData } from '../kuaishou-page.js';
+import { getPostPage, findPhotoData } from '../src/kuaishou/page.js';
 
 test('falls back to mobile post page when the share link resolves to an empty desktop shell', async () => {
   const calls = [];

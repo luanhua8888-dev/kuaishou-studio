@@ -1,7 +1,7 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectStoryTopic, splitQuoteToBeats, generateStoryScenes } from '../tiktok-story.js';
-import { wrapStory } from '../tiktok-slideshow.js';
+import { detectStoryTopic, splitQuoteToBeats, generateStoryScenes } from '../src/content/tiktok-story.js';
+import { wrapStory } from '../src/media/tiktok-slideshow.js';
 
 test('detects topics correctly from Chinese, Vietnamese and English keywords', () => {
   assert.equal(detectStoryTopic('世界如此辽阔 #治愈系风景 #风景'), 'nature');

@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from '../tiktok-upload.js';
+import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from '../src/platforms/tiktok/upload.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });

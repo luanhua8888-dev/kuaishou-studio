@@ -1,13 +1,14 @@
+import { PROJECT_ROOT } from '../../paths.js';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { removeCaptionMentions } from './caption-text.js';
-import { threadsTopic } from './threads-caption.js';
-import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
-import { confirmThreadsPost } from './threads-confirmation.js';
+import { removeCaptionMentions } from '../../content/caption-text.js';
+import { threadsTopic } from '../../content/threads-caption.js';
+import { sanitizeVideoAudioForCopyright } from '../../media/anti-copyright.js';
+import { confirmThreadsPost } from './confirmation.js';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
+const root = PROJECT_ROOT;
 export const AUTH_FILE = path.join(root, 'threads_auth.json');
 const CREATE = /^(Create|New thread|Thread mới|Tạo|Bài viết mới)$/i;
 let loginAttempt = null;

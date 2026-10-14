@@ -8,239 +8,541 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#f6f7f8; --card-bg:#fff; --card-border:#e5e7eb; --text-main:#20252b; --text-muted:#707780; --primary:#252b32; --primary-hover:#10151a; }
+    :root { --bg:#f5f6f2; --card-bg:#fff; --card-border:#e5e9e2; --text-main:#1e3029; --text-muted:#748078; --primary:#244c3a; --primary-hover:#193c2c; --accent:#366b4c; --success:#268456; --lime:#d8ed9d; }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--text-main); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-size:14px; line-height:1.6; padding:28px 32px; }
+    html { scroll-behavior:smooth; scroll-padding-top:24px; }
+    body { margin:0; padding:0 0 0 76px; background:var(--bg); color:var(--text-main); font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif; font-size:13px; line-height:1.6; min-height:100vh; }
     button,input,select,textarea { font:inherit; }
     button,a,input,select,summary { -webkit-tap-highlight-color:transparent; }
-    :focus-visible { outline:3px solid #91b5df; outline-offset:4px; }
-    .container { width:100%; margin:auto; }
-    header { margin-bottom:24px; }
-    .workspace { display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
-    .controls-column { min-width:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:stretch; }
-    .controls-column .card { min-width:0; padding:20px; margin-bottom:0; }
-    .controls-column .advanced { grid-column:1 / -1; }
-    .controls-column .queue-footer { gap:14px; flex-direction:column; align-items:stretch; }
-    .controls-column .queue-actions .btn { flex:1; }
-    .controls-column .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .controls-column .section-heading .muted { display:none; }
-    .controls-column .settings-grid { grid-template-columns:1fr; gap:16px; }
-    .card.sheet-panel { min-width:0; padding:0; overflow:hidden; margin-bottom:0; }
-    .sheet-panel-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid var(--card-border); }
-    .sheet-panel-header .helper { margin-top:3px; }
-    .sheet-tools { display:flex; align-items:center; gap:12px; flex-shrink:0; }
-    .sheet-tools a { font-size:12px; }
-    .sheet-list { max-height:480px; overflow:auto; }
-    .sheet-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }
-    .sheet-table th { text-align:left; background:var(--bg); font-weight:600; position:sticky; top:0; }
-    .sheet-table th,.sheet-table td { padding:10px 16px; border-bottom:1px solid var(--card-border); }
-    .sheet-table th:first-child, .sheet-table td:first-child { width:48px; }
-    .sheet-table th:last-child, .sheet-table td:last-child { width:54px; text-align:center; }
-    .sheet-table td { overflow-wrap:anywhere; }
-    .sheet-table tr.sheet-row-error td { background:#fff1f1; color:#a33838; border-bottom-color:#efd8d8; }
-    .sheet-table tr.sheet-row-error a { color:#a33838; }
-    .sheet-row-error-message { margin-top:6px; font-size:11px; line-height:1.5; color:#a33838; }
-    .sheet-list-message { padding:24px 16px; color:var(--text-muted); font-size:12px; }
-    .sheet-panel-note { padding:10px 22px; border-top:1px solid var(--card-border); font-size:11px; color:var(--text-muted); }
-    .sheet-reminder { position:fixed; right:24px; bottom:24px; z-index:1000; width:min(390px,calc(100vw - 32px)); display:flex; gap:12px; padding:18px; border:1px solid #ecd49a; border-radius:12px; background:#fffbeb; color:#785516; box-shadow:0 8px 32px #20252b24; }
-    .sheet-reminder strong { display:block; margin-bottom:4px; font-size:14px; }
-    .sheet-reminder p,.sheet-reminder a { font-size:12px; }
-    .sheet-reminder a { display:inline-block; margin-top:8px; color:inherit; font-weight:600; }
-    .sheet-reminder-close { align-self:flex-start; border:0; background:transparent; color:inherit; cursor:pointer; font-size:22px; line-height:1; padding:2px 4px; }
-    @media(max-width:1200px) { .controls-column .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); } .controls-column .queue-footer { flex-direction:column; align-items:stretch; } }
-    @media(max-width:1000px) { .workspace { grid-template-columns:1fr; } .controls-column { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; } .controls-column .card { margin-bottom:0; } .controls-column .advanced { grid-column:1 / -1; } }
-    .header-top,.section-heading,.sheet-top,.queue-footer,.platform-top,.post-header { display:flex; justify-content:space-between; align-items:center; gap:16px; }
-    .logo-badge { font-size:11px; font-weight:700; letter-spacing:2px; color:var(--text-muted); }
-    .header-note { font-size:12px; color:var(--text-muted); }
-    h1 { font-size:30px; letter-spacing:-1px; line-height:1.25; margin:20px 0 8px; font-weight:700; }
-    .title-row { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
-    .title-countdown { display:flex; flex-direction:column; align-items:flex-end; margin:12px 0 4px; }
-    #titleCountdownValue { font-size:clamp(40px,5vw,64px); font-weight:800; line-height:1.1; letter-spacing:-2px; font-variant-numeric:tabular-nums; color:#356948; }
-    #titleCountdownLabel { font-size:12px; color:var(--text-muted); margin-top:4px; }
-    .title-countdown[data-state="paused"] #titleCountdownValue { color:var(--text-muted); }
-    .subtitle { margin:0; color:var(--text-muted); }
-    h2 { font-size:15px; font-weight:700; margin:0; }
-    p { margin:0; }
-    .card { background:var(--card-bg); border:1px solid var(--card-border); border-radius:16px; padding:28px; margin-bottom:18px; }
-    .section-heading { margin-bottom:20px; }
-    .section-label { display:flex; align-items:center; gap:10px; }
-    .step-number { font-size:11px; color:var(--text-muted); background:var(--bg); border:1px solid var(--card-border); border-radius:6px; padding:2px 7px; }
-    .muted,.helper,.field-label { color:var(--text-muted); font-size:12px; }
-    .sheet-source { background:var(--bg); border:1px solid var(--card-border); border-radius:10px; padding:18px; }
-    .source-name { font-weight:600; }
-    .source-icon { display:inline-grid; place-items:center; width:32px; height:32px; border-radius:7px; background:#e7eee9; color:#52705c; font-size:12px; margin-right:10px; }
-    a { color:var(--text-main); text-underline-offset:4px; }
-    .sheet-top a { font-size:12px; white-space:nowrap; }
-    .sheet-source .helper { margin-top:10px; }
-    .queue-footer { align-items:flex-end; margin-top:20px; }
-    #sheetStatus { font-size:13px; overflow-wrap:anywhere; }
-    #sheetCountdown { font-size:12px; color:var(--text-muted); margin-top:4px; font-variant-numeric:tabular-nums; }
-    .queue-actions,.actions-bar { display:flex; gap:8px; flex-wrap:wrap; }
-    .btn { border:1px solid var(--card-border); border-radius:8px; background:white; color:var(--text-main); padding:10px 16px; cursor:pointer; font-weight:600; font-size:12px; display:inline-flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; white-space:nowrap; transition:background .15s; }
+    button,a,summary { touch-action:manipulation; }
+    :focus-visible { outline:3px solid #77a384; outline-offset:4px; }
     [hidden] { display:none !important; }
-    .btn:hover { background:#f0f2f4; }
-    .btn-primary { background:var(--primary); color:white; border-color:var(--primary); }
-    .btn-primary:hover { background:var(--primary-hover); }
-    .btn:disabled { opacity:.5; cursor:wait; }
-    .direct-link { border-top:1px solid var(--card-border); margin-top:22px; padding-top:16px; }
-    summary { cursor:pointer; font-size:13px; font-weight:500; }
-    details[open] > summary { margin-bottom:16px; }
-    .url-input,.caption-textarea,select { border:1px solid var(--card-border); border-radius:8px; padding:11px 13px; background:#fff; color:var(--text-main); width:100%; }
-    .url-input::placeholder { color:#9298a0; }
-    .direct-link .helper { margin-top:8px; }
-    .switches-container { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-    .switch-card { border:1px solid var(--card-border); border-radius:10px; padding:16px 14px; min-width:0; }
-    .switch-card:is(.active-ig,.active-fb,.active-tiktok) { border-color:#bfc9c3; background:#fafcfb; }
-    .platform-name { font-size:13px; font-weight:600; }
-    .platform-desc { font-size:11px; color:var(--text-muted); margin-top:5px; min-height:36px; }
-    .ig-status-pill { padding:0; border:0; background:transparent; text-align:left; color:var(--text-muted); font-size:11px; cursor:pointer; display:flex; align-items:center; gap:6px; line-height:1.5; margin-top:16px; }
-    .ig-status-pill:hover { color:var(--text-main); }
-    .dot { flex:none; width:6px; height:6px; border-radius:50%; background:#a7adb5; }
-    .dot-green { background:#42835d; }
-    .toggle-switch { position:relative; width:30px; height:18px; display:inline-block; flex:none; cursor:pointer; }
-    .toggle-switch input { opacity:0; width:30px; height:18px; margin:0; position:absolute; z-index:1; cursor:pointer; }
-    .slider { position:absolute; inset:0; border-radius:20px; background:#d8dde1; transition:background .2s; }
-    .slider:before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; border-radius:50%; background:white; transition:transform .2s; }
-    input:checked + .slider { background:#405c4b; }
-    input:checked + .slider:before { transform:translateX(12px); }
-    input:focus-visible + .slider { outline:3px solid #91b5df; outline-offset:4px; }
-    .platform-helper { margin-top:14px; }
-    .advanced { padding:18px 28px; }
-    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding-top:4px; }
-    .setting-label { display:block; font-size:12px; margin-bottom:7px; }
-    .check-field { display:flex; align-items:flex-start; gap:9px; font-size:13px; cursor:pointer; }
-    input[type=checkbox] { accent-color:#405c4b; }
-    .overlay-settings { border-top:1px solid var(--card-border); margin-top:20px; padding-top:20px; }
-    .overlay-help { margin:6px 0 12px; font-size:12px; color:var(--text-muted); }
-    .field-label { display:block; margin-bottom:6px; }
-    .help-note { margin-top:20px; font-size:12px; color:var(--text-muted); }
-    .status-box { display:none; align-items:center; gap:10px; border:1px solid var(--card-border); background:white; border-radius:10px; padding:16px 20px; margin:16px 0; font-size:13px; overflow-wrap:anywhere; }
-    .status-error { color:#a33838; background:#fff7f7; border-color:#efd8d8; }
-    .status-success { color:#356948; background:#f4faf6; border-color:#d5e5da; }
-    .spinner { width:16px; height:16px; border:2px solid #dbe0e4; border-top-color:#596774; border-radius:50%; animation:spin 1s linear infinite; flex:none; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .result-section { display:none; }
-    .post-header { justify-content:flex-start; margin-bottom:20px; }
-    .author-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; }
-    .post-info { flex:1; min-width:0; }
-    .author-name { font-weight:600; }
-    .post-title { font-size:12px; color:var(--text-muted); }
-    .badge-count { font-size:11px; color:var(--text-muted); white-space:nowrap; }
-    .caption-box { background:var(--bg); padding:16px; border:1px solid var(--card-border); border-radius:10px; margin-bottom:16px; }
-    .caption-textarea { min-height:120px; resize:vertical; margin-top:12px; font-size:13px; line-height:1.6; }
-    .actions-bar { margin-bottom:20px; }
-    .media-box { border:1px solid var(--card-border); border-radius:10px; padding:16px; margin-bottom:20px; }
-    .media-title { font-size:13px; font-weight:600; }
-    .gallery { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-    .gallery-item { position:relative; border-radius:10px; overflow:hidden; background:var(--bg); }
-    .gallery-item img { width:100%; display:block; }
-    .gallery-overlay { position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:space-between; padding:12px; background:linear-gradient(transparent,#0008); color:white; font-size:12px; }
-    .img-dl-btn { color:white; }
-    footer { text-align:center; color:#9298a0; font-size:11px; margin-top:24px; }
-    @media(max-width:700px) { body { padding:24px 16px; } .controls-column { display:block; } .controls-column .card { margin-bottom:14px; } .card { padding:20px; } .sheet-panel { padding:0; } .sheet-panel-header { align-items:flex-start; flex-direction:column; padding:16px; gap:10px; } .sheet-panel-note { padding:10px 16px; } .sheet-frame { height:520px; } .advanced { padding:16px 20px; } .switches-container { grid-template-columns:repeat(2,minmax(0,1fr)); } .settings-grid { grid-template-columns:1fr; gap:16px; } h1 { font-size:26px; } .header-note { display:none; } .gallery { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media(max-width:420px) { .queue-footer { align-items:stretch; flex-direction:column; } .queue-actions .btn { flex:1; } .sheet-top { align-items:flex-start; } .section-heading .muted { display:none; } .actions-bar .btn { flex:1 1 45%; white-space:normal; } }
-    @media(prefers-reduced-motion:reduce) { *,*:before { transition:none !important; } }
+    a { color:var(--accent); text-underline-offset:4px; }
+    button { cursor:pointer; }
+    svg { flex:none; }
+    .app-rail { width:76px; position:fixed; inset:0 auto 0 0; background:#fff; border-right:1px solid var(--card-border); z-index:20; display:flex; align-items:center; flex-direction:column; padding:24px 0; gap:32px; }
+    .brand-mark { display:grid; place-items:center; width:42px; height:42px; background:var(--primary); color:var(--lime); border-radius:13px; text-decoration:none; }
+    .rail-nav { display:flex; flex-direction:column; gap:12px; }
+    .rail-link { display:grid; place-items:center; width:44px; height:44px; border-radius:12px; color:#7c8780; border:0; background:transparent; }
+    .rail-link:hover { background:#f1f5ec; color:var(--primary); }
+    .rail-link.active { background:#eaf0e2; color:var(--primary); }
+    .rail-bottom { margin-top:auto; font-size:10px; font-weight:800; letter-spacing:.14em; color:#9ba59e; writing-mode:vertical-rl; }
+    .topbar { height:76px; padding:0 36px; display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--card-border); background:#ffffffb8; }
+    .wordmark { font-size:15px; font-weight:800; letter-spacing:-.5px; }
+    .wordmark span { margin-left:9px; padding-left:12px; border-left:1px solid #d8ded7; color:#88918a; font-size:11px; font-weight:600; letter-spacing:.13em; }
+    .topbar-right { display:flex; align-items:center; gap:17px; }
+    .local-badge { display:flex; align-items:center; gap:7px; font-size:11px; color:#717f75; }
+    .local-badge svg { color:#638369; }
+    .profile-mark { width:32px; height:32px; display:grid; place-items:center; border:1px solid #dce4d5; background:#eff3e9; border-radius:50%; font-size:10px; font-weight:800; color:#5d735c; }
+    .container { width:100%; max-width:1600px; margin:0 auto; padding:30px 36px 40px; }
+    .page-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:25px; }
+    .eyebrow { font-size:9px; font-weight:800; letter-spacing:.19em; color:#7b8d79; text-transform:uppercase; }
+    h1 { margin:5px 0 6px; font-size:30px; line-height:1.3; font-weight:800; letter-spacing:-1.2px; }
+    .page-description { margin:0; color:var(--text-muted); font-size:12px; }
+    .date-label { color:#748078; font-size:11px; padding-bottom:4px; white-space:nowrap; }
+    .overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 26px; }
+    .overview-item { display:flex; align-items:center; gap:14px; padding:15px 20px; background:#ffffff91; border:1px solid var(--card-border); border-radius:14px; }
+    .metric-icon { display:grid; place-items:center; width:38px; height:38px; color:#607953; border-radius:11px; background:#edf1e8; }
+    .metric-label { color:var(--text-muted); font-size:10px; font-weight:600; }
+    .metric-value { display:flex; align-items:baseline; gap:7px; line-height:1.2; margin-top:4px; }
+    .metric-value strong { font-size:23px; font-weight:800; letter-spacing:-.8px; font-variant-numeric:tabular-nums; }
+    .metric-value span { font-size:10px; color:#869086; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1fr) 340px; grid-template-areas:'source clock' 'queue platforms' 'queue advanced'; align-items:start; gap:20px; }
+    .controls-column { display:contents; }
+    .source-card { grid-area:source; }
+    .countdown-center-card { grid-area:clock; }
+    .platforms-card { grid-area:platforms; }
+    .advanced { grid-area:advanced; }
+    .sheet-panel { grid-area:queue; }
+    .card { min-width:0; padding:23px; background:var(--card-bg); border:1px solid var(--card-border); border-radius:18px; box-shadow:0 3px 12px #24342203; }
+    .section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:18px; }
+    .section-label { display:flex; align-items:center; gap:9px; }
+    h2 { margin:0; font-size:14px; font-weight:800; letter-spacing:-.25px; }
+    .step-number { color:#879482; background:#f4f6f0; font-size:9px; font-weight:700; padding:3px 6px; border-radius:5px; }
+    .muted,.helper,.field-label { color:var(--text-muted); font-size:11px; }
+    .section-heading>.muted { background:#f5f7f1; border:1px solid #e9ede3; padding:3px 8px; border-radius:20px; font-size:9px; }
+    .sheet-source { border:1px solid #dce8d7; background:#f5f8f0; border-radius:12px; padding:14px 16px; }
+    .sheet-top { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .source-name { display:flex; align-items:center; gap:10px; font-weight:700; font-size:12px; }
+    .source-icon { width:29px; height:32px; display:grid; place-items:center; background:#e0ecd7; border-radius:7px; color:#4e7543; font-size:10px; font-weight:800; }
+    .sheet-top a { font-size:10px; font-weight:700; text-decoration:none; white-space:nowrap; }
+    .sheet-top a:hover { text-decoration:underline; }
+    .sheet-source .helper { margin:9px 0 0 39px; font-size:10px; line-height:1.7; }
+    .queue-footer { display:flex; flex-direction:column; gap:15px; margin-top:15px; }
+    .queue-state { display:flex; gap:8px; align-items:baseline; }
+    .queue-state::before { content:''; display:block; width:6px; height:6px; border-radius:50%; background:#b5c1ac; flex:none; }
+    .queue-state[data-tone=error]::before { background:#c46550; }
+    .queue-state[data-tone=error] #sheetStatus { color:#9b5848; }
+    #sheetStatus { font-size:11px; font-weight:500; color:#6d7b70; overflow-wrap:anywhere; line-height:1.7; }
+    #sheetCountdown { color:var(--text-muted); font-size:10px; margin-top:4px; font-variant-numeric:tabular-nums; }
+    .queue-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .queue-actions .btn { flex:1; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 15px; min-height:40px; border:1px solid #dde4d9; border-radius:9px; background:#fff; color:var(--text-main); font-size:11px; font-weight:700; text-decoration:none; white-space:nowrap; transition:background .18s,transform .18s,border-color .18s; }
+    .btn:hover { background:#f1f5ec; border-color:#b9c9b1; }
+    .btn:active { transform:translateY(1px); }
+    .btn-primary { background:var(--primary); color:white; border-color:var(--primary); box-shadow:0 3px 6px #234b3920; }
+    .btn-primary:hover { background:var(--primary-hover); border-color:var(--primary-hover); }
+    #btnRun::before { content:'▶'; font-size:8px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .direct-link { border-top:1px solid #edf0e9; padding-top:12px; margin-top:15px; }
+    summary { cursor:pointer; font-size:11px; font-weight:600; color:#72816f; }
+    summary:hover { color:var(--primary); }
+    details[open]>summary { margin-bottom:13px; }
+    .direct-link summary::marker { color:#8fa07f; font-size:9px; }
+    .url-input,.caption-textarea,select { width:100%; padding:10px 12px; border:1px solid #dce3d8; border-radius:9px; background:#fff; color:var(--text-main); font-size:12px; transition:border-color .15s,box-shadow .15s; }
+    .url-input:focus,.caption-textarea:focus,select:focus { outline:none; border-color:#7c9c6e; box-shadow:0 0 0 3px #8cb56819; }
+    .direct-link .helper { margin-bottom:0; font-size:10px; }
+    .countdown-center-card { position:relative; overflow:hidden; align-self:stretch; display:flex; flex-direction:column; padding:22px 25px; background:#233e32; border:1px solid #233e32; color:#fff; }
+    .countdown-center-card::before,.countdown-center-card::after { content:''; position:absolute; width:230px; height:230px; border:1px solid #b1ce9e13; border-radius:50%; right:-88px; top:40px; pointer-events:none; }
+    .countdown-center-card::after { width:170px; height:170px; top:70px; right:-58px; }
+    .clock-heading { display:flex; justify-content:space-between; align-items:center; font-size:9px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#b9cdb7; z-index:1; }
+    .clock-heading svg { opacity:.7; }
+    .title-countdown { position:relative; margin:auto 0; padding:22px 0; z-index:1; }
+    #titleCountdownValue { font-size:56px; font-weight:600; letter-spacing:-2px; line-height:1.15; color:var(--lime); display:block; font-variant-numeric:tabular-nums; }
+    #titleCountdownLabel { display:block; margin-top:9px; color:#c0d0bf; font-size:11px; }
+    .clock-footer { position:relative; z-index:1; display:flex; gap:7px; align-items:center; font-size:9px; color:#afc4aa; border-top:1px solid #d3e7c21c; padding-top:13px; }
+    .clock-footer i { width:5px; height:5px; border-radius:50%; background:#d4eaa0; }
+    .title-countdown[data-state=running] #titleCountdownValue { color:#e6f8bf; }
+    .switches-container { display:flex; flex-direction:column; }
+    .switch-card { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 0; border-bottom:1px solid #edf0e8; min-width:0; }
+    .switch-card:last-child { border-bottom:0; }
+    .platform-lead { display:flex; align-items:center; gap:10px; min-width:0; }
+    .platform-icon { width:33px; height:33px; display:grid; place-items:center; border-radius:10px; color:#fff; flex:none; }
+    .ig-icon { background:#c45d8b; }
+    .fb-icon { background:#4a78cf; }
+    .tiktok-icon,.threads-icon,.x-icon { background:#313b37; }
+    .platform-meta { display:flex; flex-direction:column; min-width:0; }
+    .platform-name { font-size:11px; font-weight:800; line-height:1.4; }
+    .platform-desc { font-size:9px; color:#8a948b; margin-top:2px; white-space:nowrap; }
+    .platform-controls { display:flex; align-items:center; justify-content:flex-end; gap:9px; flex:none; }
+    .ig-status-pill { border:0; background:transparent; color:#7f8c7b; padding:7px 0; display:inline-flex; align-items:center; gap:4px; font-size:9px; font-weight:500; max-width:100px; }
+    .ig-status-pill span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ig-status-pill:hover { color:var(--primary); text-decoration:underline; }
+    .dot { display:inline-block; width:4px; height:4px; border-radius:50%; flex:none; }
+    .dot-green { background:#5c9c61; }.dot-gray { background:#a8ada3; }.dot-red { background:#be6a59; }
+    .toggle-switch { position:relative; width:30px; height:18px; flex:none; display:inline-block; }
+    .toggle-switch input { position:absolute; z-index:1; opacity:0; width:40px; height:38px; margin:0; left:-5px; top:-10px; cursor:pointer; }
+    .slider { position:absolute; inset:0; border-radius:20px; background:#e0e5dc; transition:background .2s; }
+    .slider::before { content:''; position:absolute; width:12px; height:12px; left:3px; top:3px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #1a332520; transition:transform .2s; }
+    input:checked+.slider { background:#4e7451; }
+    input:checked+.slider::before { transform:translateX(12px); }
+    input:disabled+.slider { opacity:.6; }
+    input:focus-visible+.slider { outline:3px solid #9db784; outline-offset:4px; }
+    .switch-card:not(:has(input:checked)) .platform-icon { background:#c9d0c4; }
+    .switch-card:not(:has(input:checked)) .platform-name { color:#8c978a; }
+    .platform-helper { font-size:10px; line-height:1.8; border-top:1px solid #edf0e8; margin:8px 0 0; padding-top:12px; }
+    .card.advanced { padding:0; overflow:hidden; }
+    .advanced summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:18px 20px; color:var(--text-main); }
+    .advanced[open]>summary { border-bottom:1px solid var(--card-border); margin-bottom:0; }
+    .summary-left { display:flex; flex-direction:column; gap:4px; }
+    .summary-left>span:first-child { font-size:12px; font-weight:800; }
+    .summary-pill { font-size:9px; color:var(--text-muted); font-weight:400; }
+    .advanced-body { padding:17px; display:flex; flex-direction:column; gap:14px; }
+    .advanced-grid { display:grid; grid-template-columns:1fr; gap:14px; }
+    .option-card { background:#f7f8f4; border:1px solid #e7ebe1; padding:13px; border-radius:10px; }
+    .option-card-title { font-size:11px; font-weight:700; margin-bottom:9px; display:flex; flex-wrap:wrap; justify-content:space-between; gap:5px; }
+    .check-field { display:flex; align-items:flex-start; gap:8px; font-size:11px; line-height:1.7; }
+    input[type=checkbox] { accent-color:var(--primary); }
+    .key-input-row { display:flex; gap:6px; }.key-input-row input { min-width:0; }
+    .sheet-panel { padding:0; overflow:hidden; }
+    .sheet-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:22px 23px 18px; }
+    .sheet-panel-header .helper { margin:4px 0 0; font-size:10px; }
+    .sheet-tools { display:flex; gap:10px; align-items:center; }.sheet-tools a { font-size:10px; text-decoration:none; }
+    .sheet-tools .btn { min-height:32px; padding:6px 10px; font-size:10px; }
+    .sheet-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 23px 16px; }
+    .sheet-tabs { display:flex; gap:3px; background:#f3f5ef; border-radius:8px; padding:3px; }
+    .filter-btn { border:0; background:transparent; color:#7c8876; padding:6px 10px; border-radius:6px; font-size:10px; white-space:nowrap; }
+    .filter-btn[aria-pressed=true] { color:#365b36; background:#fff; box-shadow:0 1px 4px #2338250d; font-weight:700; }
+    .sheet-search { display:flex; align-items:center; gap:6px; border:1px solid #e3e8dd; border-radius:8px; padding:7px 9px; color:#9aa492; min-width:0; max-width:205px; }
+    .sheet-search:focus-within { border-color:#97b67f; box-shadow:0 0 0 2px #aec79522; }
+    .sheet-search input { width:100%; min-width:0; padding:0; border:0; outline:0; font-size:10px; color:var(--text-main); background:transparent; }
+    .sheet-list { max-height:485px; min-height:260px; overflow:auto; scrollbar-width:thin; scrollbar-color:#d5ddcd transparent; }
+    .sheet-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .sheet-table th { position:sticky; top:0; z-index:1; background:#f7f9f3; color:#89917d; font-size:9px; font-weight:700; letter-spacing:.04em; text-align:left; padding:11px 15px; border-top:1px solid #e9ede4; border-bottom:1px solid #e9ede4; }
+    .sheet-table td { padding:14px 15px; border-bottom:1px solid #edf0e8; font-size:10px; overflow-wrap:anywhere; line-height:1.65; }
+    .sheet-table th:first-child,.sheet-table td:first-child { width:55px; padding-left:23px; }
+    .sheet-table th:last-child,.sheet-table td:last-child { width:50px; text-align:center; }
+    .sheet-table tr:hover td { background:#fafbf7; }
+    .sheet-table a { text-decoration:none; color:#5c7752; }.sheet-table a:hover { text-decoration:underline; }
+    .sheet-table tr.sheet-row-error td { background:#fdf5f1; border-bottom-color:#f2e2d9; }
+    .sheet-row-error-message { color:#af604c; font-size:9px; margin:5px 0 0; }
+    .sheet-list-message { text-align:center; padding:60px 24px; color:#8a9581; font-size:12px; }
+    .sheet-panel-note { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:5px; margin:0; padding:13px 23px; border-top:1px solid #e8ede2; background:#fcfdfa; color:#8b967e; font-size:9px; }
+    .sheet-panel-note span:first-child::before { content:'↻'; margin-right:6px; font-size:12px; }
+    .status-box { display:none; align-items:center; gap:10px; margin:20px 0; padding:15px 20px; border:1px solid var(--card-border); border-radius:12px; background:#fff; font-size:12px; }
+    .status-error { background:#fff6f2; color:#a35c49; border-color:#edd9d0; }.status-success { background:#f0f6e9; color:#4d7140; border-color:#d8e5ca; }
+    .spinner { width:16px; height:16px; border:2px solid #dbe5d4; border-top-color:#668654; border-radius:50%; animation:spin 1s linear infinite; flex:none; } @keyframes spin { to { transform:rotate(360deg); } }
+    .result-section { display:none; margin-top:20px; }
+    .post-header { display:flex; align-items:center; gap:14px; margin-bottom:20px; }.author-avatar { width:44px; height:44px; object-fit:cover; border-radius:50%; }.post-info { flex:1; min-width:0; }.author-name { font-weight:800; }.post-title { font-size:12px; color:var(--text-muted); overflow-wrap:anywhere; }.badge-count { font-size:11px; color:var(--text-muted); }
+    .caption-box { background:#f6f8f2; padding:18px; border:1px solid var(--card-border); border-radius:12px; margin-bottom:18px; }.caption-textarea { min-height:120px; resize:vertical; line-height:1.8; margin-top:10px; }
+    .actions-bar { display:flex; flex-wrap:wrap; gap:9px; margin-bottom:20px; }.gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; }.gallery-item { position:relative; overflow:hidden; border-radius:12px; }.gallery-item img { width:100%; display:block; }.gallery-overlay { display:flex; align-items:center; justify-content:space-between; padding:8px; font-size:10px; }
+    .sheet-reminder { position:fixed; right:24px; bottom:24px; z-index:100; width:min(350px,calc(100vw - 32px)); display:flex; gap:12px; padding:18px; border:1px solid #dce6c9; border-radius:15px; background:#f6faee; color:#687d48; box-shadow:0 8px 30px #273d2614; }
+    .sheet-reminder strong { font-size:12px; }.sheet-reminder p,.sheet-reminder a { font-size:10px; }.sheet-reminder-close { align-self:flex-start; border:0; background:transparent; color:inherit; font-size:20px; }
+    dialog { border:1px solid var(--card-border); border-radius:18px; box-shadow:0 24px 100px #152e3040; max-width:calc(100vw - 32px); padding:26px; }dialog::backdrop { background:#182d2466; backdrop-filter:blur(3px); }
+    .header-note { display:none; }
+    /* Motion stays subtle; the activity indicator follows the real queue state. */
+    @keyframes reveal { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes breathe { 0%,100% { box-shadow:0 0 0 0 #d4eaa030; } 50% { box-shadow:0 0 0 5px #d4eaa000; } }
+    @keyframes orbit { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+    @keyframes ripple { to { transform:scale(3.5); opacity:0; } }
+    .page-heading { animation:reveal .45s both; }
+    .overview-item { animation:reveal .45s both; transition:background .2s,border-color .2s,transform .2s; }
+    .overview-item:nth-child(1) { animation-delay:.06s; }.overview-item:nth-child(2) { animation-delay:.12s; }.overview-item:nth-child(3) { animation-delay:.18s; }
+    .overview-item:hover { background:#fff; border-color:#cbd9be; transform:translateY(-2px); }
+    .workspace>.card,.controls-column>.card { animation:reveal .5s .12s both; transition:box-shadow .25s,border-color .25s; }
+    .card:hover { border-color:#d0dcc4; box-shadow:0 8px 24px #2e492206; }
+    .countdown-center-card:hover { border-color:#46674b; }
+    .countdown-center-card::after { border-style:dashed; }
+    .countdown-center-card:has([data-state=running])::after { animation:orbit 50s linear infinite; }
+    .countdown-center-card:has([data-state=running]) .clock-footer i,.countdown-center-card:has([data-state=waiting]) .clock-footer i { animation:breathe 2s ease-in-out infinite; }
+    .btn,.filter-btn { position:relative; overflow:hidden; }
+    .btn:not(:disabled):hover { transform:translateY(-1px); }.btn:not(:disabled):active { transform:translateY(0); }
+    .click-ripple { position:absolute; width:48px; height:48px; margin:-24px 0 0 -24px; background:currentColor; opacity:.12; border-radius:50%; pointer-events:none; animation:ripple .55s ease-out forwards; }
+    .rail-link { transition:color .18s,background .18s,transform .18s; }.rail-link:hover { transform:translateY(-2px); }
+    .sheet-table td { transition:background .18s; }.platform-icon { transition:transform .2s,background .2s; }.switch-card:hover .platform-icon { transform:scale(1.07); }
+    /* Fill the viewport; only the queue and the controls may scroll. */
+    html,body { height:100%; overflow:hidden; }
+    body { min-height:0; height:100dvh; padding:0; }
+    .app-rail { inset:0 auto auto 225px; width:auto; height:48px; padding:0; background:transparent; border:0; flex-direction:row; }
+    .app-rail>.brand-mark,.rail-bottom { display:none; }
+    .rail-link { width:34px; height:32px; border-radius:8px; }
+    .rail-nav { flex-direction:row; gap:5px; }
+    .topbar { height:48px; padding:0 18px; }
+    .profile-mark { width:28px; height:28px; }
+    .date-label { font-size:10px; padding:0; }
+    .container { max-width:none; height:calc(100dvh - 48px); padding:8px 12px 10px; display:grid; grid-template-columns:minmax(250px,1fr) minmax(480px,1.65fr); grid-template-rows:56px minmax(0,1fr); gap:8px 16px; }
+    .page-heading { min-width:0; margin:0; align-items:center; }
+    h1 { font-size:24px; margin:0 0 3px; }
+    .eyebrow { display:none; }
+    .page-description { font-size:10px; }
+    .overview { margin:0; gap:8px; align-self:stretch; }
+    .overview-item { padding:6px 12px; gap:10px; border-radius:12px; }
+    .metric-icon { width:30px; height:30px; border-radius:9px; }
+    .metric-label { font-size:10px; }
+    .metric-value { margin-top:2px; gap:5px; }
+    .metric-value strong { font-size:21px; }
+    .metric-value span { font-size:9px; }
+    .workspace { grid-column:1/-1; min-height:0; grid-template-columns:minmax(0,1fr) 320px; grid-template-rows:minmax(0,1fr); grid-template-areas:'queue controls'; gap:10px; align-items:stretch; }
+    .controls-column { grid-area:controls; display:flex; flex-direction:column; gap:8px; min-width:0; min-height:0; overflow:auto; scrollbar-width:thin; }
+    .card { padding:12px; border-radius:14px; }
+    .workspace>.card,.controls-column>.card { animation-fill-mode:backwards; }
+    .controls-column>.card { flex:none; }
+    .source-card { display:flex; flex-direction:column; gap:8px; }
+    .sheet-source { padding:0; border:0; background:transparent; border-radius:0; }
+    .sheet-top { gap:8px; }
+    .source-name { font-size:12px; gap:8px; }
+    .source-icon { width:27px; height:29px; }
+    .sheet-source .helper { margin:5px 0 0; font-size:9px; line-height:1.5; }
+    .queue-footer { margin:0; min-width:0; gap:6px; }
+    .queue-state { min-height:16px; max-height:48px; flex-shrink:0; overflow:auto; scrollbar-width:thin; }
+    #sheetStatus { font-size:10px; line-height:16px; }#sheetCountdown { display:none; }
+    .queue-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    .queue-actions .btn { min-width:0; min-height:32px; padding:5px 8px; font-size:10px; }
+    #btnRun { grid-column:1/-1; grid-row:1; }
+    .queue-actions:has(#btnPauseQueue[hidden]) #btnRunNext { grid-column:1/-1; }
+    .direct-link { margin:0; padding-top:6px; }
+    .direct-link summary { font-size:10px; }
+    .direct-link[open]>summary { margin-bottom:8px; }
+    .direct-link .url-input { padding:8px 10px; font-size:11px; }
+    .direct-link .helper { margin-top:6px; font-size:9px; }
+    .countdown-center-card { min-height:0; padding:10px 12px; gap:3px; }
+    .clock-heading { font-size:8px; letter-spacing:.06em; }
+    .clock-heading svg { width:14px; height:14px; }
+    .title-countdown { margin:0; padding:0; display:flex; align-items:center; gap:12px; }
+    #titleCountdownValue { font-size:34px; letter-spacing:-1.2px; flex:none; }
+    #titleCountdownLabel { margin:0; font-size:10px; line-height:1.5; }
+    .clock-footer { padding-top:4px; font-size:8px; }
+    .platforms-card { display:flex; flex-direction:column; padding:10px 12px; }
+    .platforms-card .section-heading { margin-bottom:4px; }
+    .section-heading h2 { font-size:12px; }
+    .switches-container { min-height:0; }
+    .switch-card { padding:3px 0; min-height:36px; }
+    .platform-lead { gap:8px; }
+    .platform-icon { width:27px; height:27px; border-radius:8px; }
+    .platform-name { font-size:11px; }
+    .platform-desc { font-size:9px; margin-top:0; }
+    .platform-controls { gap:7px; }
+    .ig-status-pill { max-width:100px; }
+    .platform-helper { font-size:9px; line-height:1.5; margin-top:4px; padding-top:5px; }
+    .advanced summary { min-height:44px; padding:7px 12px; }
+    .summary-left { gap:1px; }
+    .summary-left>span:first-child { font-size:11px; }
+    .advanced[open] { position:fixed; top:58px; right:16px; width:370px; max-width:calc(100vw - 32px); max-height:calc(100dvh - 74px); z-index:60; overflow:auto; box-shadow:0 18px 75px #16382530; animation:none; }
+    .advanced[open]>summary { position:sticky; top:0; background:white; z-index:1; border-bottom:1px solid var(--card-border); }
+    .sheet-panel { min-height:0; height:100%; padding:0; display:flex; flex-direction:column; }
+    .sheet-panel-header { padding:12px 14px 8px; flex:none; }
+    .sheet-panel-header .helper { margin:2px 0 0; }
+    .sheet-toolbar { padding:0 14px 8px; gap:8px; flex:none; }
+    .sheet-search { max-width:240px; flex:1; padding:6px 9px; }
+    .sheet-tabs { padding:2px; }
+    .filter-btn { min-height:30px; padding:5px 10px; }
+    .sheet-list { min-height:0; max-height:none; flex:1; overscroll-behavior:contain; }
+    .sheet-table td { padding:8px 12px; font-size:11px; }
+    .sheet-table th { padding:8px 12px; }
+    .sheet-table th:first-child,.sheet-table td:first-child { width:58px; padding-left:14px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .sheet-table th:last-child,.sheet-table td:last-child { width:44px; padding-left:5px; padding-right:5px; white-space:nowrap; }
+    .sheet-panel-note { flex:none; padding:6px 14px; }
+    .status-box { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:min(650px,calc(100vw - 36px)); max-height:25dvh; overflow:auto; z-index:70; margin:0; box-shadow:0 8px 25px #21342620; }
+    .result-section { position:fixed; inset:58px 16px 16px; margin:0 auto; max-width:1300px; z-index:50; overflow:auto; box-shadow:0 16px 100px #142e3940; }
+    .result-toolbar { position:sticky; top:-12px; display:flex; align-items:center; justify-content:space-between; background:white; padding:8px 0 12px; margin-bottom:10px; z-index:2; border-bottom:1px solid var(--card-border); }
+    @media(min-width:1500px) { .workspace { grid-template-columns:minmax(0,1fr) 340px; }.platforms-card { padding:12px 14px; }.switch-card { min-height:42px; } }
+    @media(min-width:761px) and (min-height:900px) { .controls-column>.advanced[open] { position:relative; inset:auto; flex:1; min-height:140px; width:100%; max-width:none; max-height:none; box-shadow:none; }.advanced[open]>summary { top:0; } }
+    @media(max-width:1100px) and (min-width:761px) { .container { grid-template-columns:minmax(190px,1fr) minmax(420px,1.6fr); gap:8px 12px; padding:10px 12px; }.overview-item { padding:8px; gap:7px; }.metric-icon { display:none; }.workspace { grid-template-columns:minmax(0,1fr) 300px; gap:8px; }.page-description { max-width:240px; }.sheet-tools a { display:none; }.sheet-toolbar { flex-wrap:wrap; }.sheet-search { min-width:130px; max-width:none; }.sheet-table { min-width:480px; }.local-badge { display:none; }.platform-controls { gap:5px; }.ig-status-pill { max-width:90px; } }
+    @media(max-width:760px) {
+      body { padding:0; }
+      .topbar { height:44px; padding:0 12px; }
+      .date-label { display:none; }.local-badge { font-size:9px; }.topbar-right { gap:8px; }
+      .app-rail { inset:auto 0 0; width:100%; height:50px; padding:4px 16px; border-top:1px solid var(--card-border); background:#fff; flex-direction:row; justify-content:center; }
+      .app-rail>.brand-mark,.rail-bottom { display:none; }.rail-nav { flex-direction:row; gap:40px; }.rail-link { width:44px; height:40px; }
+      .container { height:calc(100dvh - 94px); padding:8px 10px; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(0,1fr); gap:8px; }
+      h1 { font-size:21px; margin:0; }.page-description { display:none; }
+      .overview { gap:6px; }.overview-item { padding:6px 9px; }.metric-icon { display:none; }.metric-label { font-size:9px; }.metric-value strong { font-size:18px; }.metric-value span { font-size:8px; }
+      .workspace { display:flex; flex-direction:column; gap:8px; overflow:auto; padding:0 1px 4px; scrollbar-width:thin; scroll-behavior:smooth; }
+      .controls-column { display:contents; }.workspace>.card,.controls-column>.card { flex:none; width:100%; }
+      .source-card { order:1; }.countdown-center-card { order:2; }.sheet-panel { order:3; }.platforms-card { order:4; }.advanced { order:5; }
+      .queue-actions { grid-template-columns:1fr 1.25fr; }.queue-actions .btn { min-height:38px; font-size:11px; }
+      #btnRun { grid-column:1/-1; }.queue-actions:has(#btnPauseQueue[hidden]) #btnRun { grid-column:2; }.queue-actions:has(#btnPauseQueue[hidden]) #btnRunNext { grid-column:1; grid-row:1; }
+      .direct-link summary { min-height:24px; display:flex; align-items:center; gap:6px; font-size:11px; }.direct-link summary::before { content:'+'; }.direct-link[open] summary::before { content:'−'; }
+      .platform-icon { width:30px; height:30px; }.switch-card { min-height:44px; }.ig-status-pill { font-size:10px; max-width:125px; }.platform-controls { gap:12px; }
+      .advanced[open] { top:54px; right:12px; width:calc(100vw - 24px); max-height:calc(100dvh - 114px); }
+      .sheet-panel { height:clamp(320px,62dvh,520px); min-height:0; }.sheet-panel-header { padding:10px 12px 8px; }.sheet-panel-header h2 { font-size:13px; }.sheet-tools a { display:none; }.sheet-tools .btn { padding:6px 8px; }
+      .sheet-toolbar { padding:0 12px 8px; flex-wrap:wrap; }.sheet-tabs { flex:1; justify-content:space-between; }.filter-btn { min-height:32px; }.sheet-search { max-width:none; flex-basis:100%; min-height:32px; }.sheet-table { min-width:480px; }.sheet-table td { padding-top:9px; padding-bottom:9px; }
+      .result-section { inset:54px 10px 60px; }.actions-bar .btn { flex:1; }.status-box { bottom:60px; }.sheet-reminder { bottom:60px; max-height:30dvh; overflow:auto; }
+    }
+    @media(prefers-reduced-motion:reduce) { html,.workspace { scroll-behavior:auto; } *,*::before,*::after { animation:none !important; transition:none !important; }.btn:hover,.rail-link:hover,.overview-item:hover,.switch-card:hover .platform-icon { transform:none !important; } }
   </style>
 </head>
 <body>
+  <aside class="app-rail" aria-label="Điều hướng Studio">
+    <a class="brand-mark" href="#studio" aria-label="Kuaishou Studio"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="4" stroke="currentColor" stroke-width="2"/><path d="m17 10 4-3v10l-4-3M8 9v6l5-3-5-3Z" fill="currentColor"/></svg></a>
+    <nav class="rail-nav">
+      <a class="rail-link active" href="#studio" aria-label="Tổng quan" title="Tổng quan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></a>
+      <a class="rail-link" href="#sheetPanel" aria-label="Hàng đợi nội dung" title="Hàng đợi"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></a>
+      <button class="rail-link" type="button" id="btnOpenSettings" aria-label="Tùy chọn nội dung" title="Tùy chọn nội dung"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 3v7m0 4v7M12 3v2m0 4v12M19 3v11m0 4v3M2 10h6M9 5h6m1 9h6"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="19" cy="16" r="2"/></svg></button>
+    </nav>
+    <span class="rail-bottom">CREATE · PUBLISH · REPEAT</span>
+  </aside>
+  <header class="topbar" id="studio">
+    <div class="wordmark">kuaishou<span>STUDIO</span></div>
+    <div class="topbar-right"><time class="date-label" id="studioDate"></time><span class="local-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8m-4-5v5"/></svg>Không gian cá nhân</span><span class="profile-mark" aria-hidden="true">KS</span></div>
+  </header>
   <div class="container">
-    <header>
-      <div class="header-top"><div class="logo-badge">KUAISHOU STUDIO</div><span class="header-note">Một nơi quản lý · Năm nền tảng</span></div>
-      <div class="title-row">
-        <h1>Đăng nội dung, đơn giản hơn.</h1>
-        <div id="titleCountdown" class="title-countdown" data-state="paused" aria-label="Trạng thái hàng đợi">
-          <span id="titleCountdownValue">—</span><span id="titleCountdownLabel">Đang tải trạng thái…</span>
-        </div>
-      </div>
-      <p class="subtitle">Thêm link vào bảng. Chọn nơi đăng. Công cụ xử lý phần còn lại.</p>
-    </header>
-    <main class="workspace">
-    <div class="controls-column">
-    <section class="card" aria-labelledby="sourceHeading">
-      <div class="section-heading"><div class="section-label"><span class="step-number">01</span><h2 id="sourceHeading">Nguồn nội dung</h2></div><span class="muted">Hàng đợi tự động</span></div>
-      <div class="sheet-source">
-        <div class="sheet-top"><div class="source-name"><span class="source-icon" aria-hidden="true">GS</span>Google Sheets</div><a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở bảng ↗</a></div>
-        <p class="helper">Cột A: Link cần đăng. Đăng thành công: tự động chuyển sang Cột B và tick Cột C.</p>
-      </div>
-      <div class="queue-footer">
-        <div><div id="sheetStatus" aria-live="polite">Đang tải trạng thái…</div><div id="sheetCountdown" aria-live="off"></div></div>
-        <div class="queue-actions"><button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button><button id="btnRunNext" class="btn" type="button" title="Chạy ngay link tiếp theo trong Google Sheets mà không cần chờ">Chạy link tiếp theo</button><button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button></div>
-      </div>
-      <details class="direct-link"><summary>Đăng một link riêng</summary><input type="text" id="urlInput" class="url-input" aria-label="Đường link Kuaishou" placeholder="Dán link Kuaishou tại đây…" autocomplete="off"><p class="helper">Dán link rồi bấm “Đăng link này”. Để trống để dùng hàng đợi Google Sheets.</p></details>
-    </section>
-    <section class="card" aria-labelledby="platformHeading">
-      <div class="section-heading"><div class="section-label"><span class="step-number">02</span><h2 id="platformHeading">Nơi đăng</h2></div><span class="muted">Bật nền tảng bạn muốn dùng</span></div>
-      <div class="switches-container">
-        <div class="switch-card" id="swCardIG">
-          <div class="platform-top"><span class="platform-name">Instagram</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostIG" aria-label="Đăng lên Instagram" checked><span class="slider"></span></label></div>
-          <p class="platform-desc">Reels & bộ ảnh</p>
-          <button type="button" id="igStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Instagram"><span id="igDot" class="dot dot-gray"></span><span id="igStatusText">Đang kiểm tra…</span></button>
-        </div>
-        <div class="switch-card" id="swCardFB">
-          <div class="platform-top"><span class="platform-name">Facebook</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostFB" aria-label="Đăng lên Facebook" checked><span class="slider"></span></label></div>
-          <p class="platform-desc">Qua Instagram liên kết</p>
-          <button type="button" id="fbStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Facebook"><span id="fbDot" class="dot dot-gray"></span><span id="fbStatusText">Đang kiểm tra…</span></button>
-        </div>
-        <div class="switch-card" id="swCardTikTok">
-          <div class="platform-top"><span class="platform-name">TikTok</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostTikTok" aria-label="Đăng lên TikTok" checked><span class="slider"></span></label></div>
-          <p class="platform-desc">Video có nhạc</p>
-          <button type="button" id="tiktokStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối TikTok"><span id="tiktokDot" class="dot dot-gray"></span><span id="tiktokStatusText">Đang kiểm tra…</span></button>
-        </div>
-        <div class="switch-card" id="swCardThreads">
-          <div class="platform-top"><span class="platform-name">Threads</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostThreads" aria-label="Đăng lên Threads" checked><span class="slider"></span></label></div>
-          <p class="platform-desc">Ảnh & video trực tiếp</p>
-          <button type="button" id="threadsStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Threads"><span id="threadsDot" class="dot dot-gray"></span><span id="threadsStatusText">Đang kiểm tra…</span></button>
-        </div>
-      </div>
-      <div class="switch-card" id="swCardX" style="margin-top:10px">
-        <div class="platform-top"><span class="platform-name">X (Twitter)</span><label class="toggle-switch"><input type="checkbox" id="chkAutoPostX" aria-label="Đăng lên X"><span class="slider"></span></label></div>
-        <p class="platform-desc">Video hoặc tối đa 4 ảnh</p>
-        <button type="button" id="xStatusBtn" class="ig-status-pill"><span id="xDot" class="dot dot-gray"></span><span id="xStatusText">Đang kiểm tra…</span></button>
-      </div>
-      <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook cần tài khoản liên kết với Instagram.</p>
-    </section>
-    <details class="card advanced">
-      <summary>Tùy chọn nội dung</summary>
-      <div class="settings-grid">
-        <div><label for="captionLangSelect" class="setting-label">Ngôn ngữ mô tả</label><select id="captionLangSelect"><option value="en" selected>Tiếng Anh</option><option value="vi">Tiếng Việt</option><option value="both">Anh + Việt</option><option value="raw">Tiếng Trung gốc</option></select></div>
-        <div><label class="check-field"><input type="checkbox" id="chkAsReel" checked><span>Tạo video dọc từ bộ ảnh<br><span class="helper">Tỷ lệ 9:16, chuyển cảnh và ghép nhạc.</span></span></label></div>
-      </div>
-      <div class="overlay-settings">
-        <label class="check-field"><input type="checkbox" id="chkAddMoodText" checked><span>Chèn câu chuyện lên video TikTok</span></label>
-        <p class="overlay-help">Áp dụng khi chuyển bộ ảnh thành video TikTok. Khi có Gemini AI, AI sẽ tự động đọc tiêu đề, ảnh và nhạc để viết câu chuyện riêng biệt cho từng bài.</p>
-        
-        <div style="margin-top:12px; padding:12px; background:var(--bg); border:1px solid var(--card-border); border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <label for="geminiApiKeyInput" class="setting-label" style="margin:0; font-weight:600; font-size:12px;">Google Gemini AI Key (Miễn phí)</label>
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size:11px; color:#3b6978; text-decoration:underline;">Lấy key miễn phí ↗</a>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán Gemini API Key (AIzaSy...)" style="margin:0; font-size:12px; padding:6px 10px; height:34px;">
-            <button type="button" id="btnSaveGeminiKey" class="btn btn-secondary" style="padding:0 12px; font-size:12px; white-space:nowrap;">Lưu Key</button>
-          </div>
-          <p id="geminiKeyStatus" class="helper" style="margin:6px 0 0; font-size:11px;">Đang kiểm tra kết nối AI…</p>
-        </div>
-
-        <div id="moodTextContainer" style="margin-top:12px;">
-          <label for="moodTextInput" class="field-label">Ghi đè câu chuyện thủ công (mỗi dòng một câu · để trống để AI tự sinh)</label>
-          <textarea id="moodTextInput" class="url-input" rows="3" placeholder="Để trống: AI Gemini sẽ tự động viết câu chuyện phù hợp từng video.&#10;Hoặc tự điền từng dòng nếu muốn dùng câu cố định."></textarea>
-        </div>
-      </div>
-      <p class="help-note">Mỗi mô tả có 5 hashtag và tự loại bỏ @. Threads có thêm một chủ đề phù hợp. Khả năng được đề xuất còn phụ thuộc nội dung và trạng thái tài khoản.</p>
-    </details>
+    <span class="header-note" hidden></span>
+    <div class="page-heading">
+      <div><span class="eyebrow">YOUR CONTENT, CONNECTED</span><h1>Studio của bạn.</h1><p class="page-description">Quản lý nội dung và đăng lên các kênh từ một nơi.</p></div>
     </div>
-    <section class="card sheet-panel" aria-labelledby="sheetHeading">
+    <section class="overview" aria-label="Tổng quan nội dung">
+      <div class="overview-item"><span class="metric-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8m-8 4h4"/></svg></span><div><div class="metric-label">Trong hàng đợi</div><div class="metric-value"><strong id="pendingMetric">—</strong><span>nội dung</span></div></div></div>
+      <div class="overview-item"><span class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></span><div><div class="metric-label">Đã hoàn thành</div><div class="metric-value"><strong id="doneMetric">—</strong><span>nội dung</span></div></div></div>
+      <div class="overview-item"><span class="metric-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="5" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10 6-4m-6 8 6 4"/></svg></span><div><div class="metric-label">Kênh đang chọn</div><div class="metric-value"><strong id="channelsMetric">—</strong><span>nền tảng</span></div></div></div>
+    </section>
+    <main class="workspace" id="workspace">
+    <div class="controls-column">
+      <!-- 01. NGUỒN NỘI DUNG -->
+      <section class="card source-card" aria-labelledby="sourceHeading">
+        <div class="sheet-source">
+          <div class="sheet-top">
+            <h2 id="sourceHeading" class="source-name"><span class="source-icon" aria-hidden="true">GS</span>Google Sheets</h2>
+            <a id="sheetLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở bảng ↗</a>
+          </div>
+          <p class="helper">A: link chờ · B: đã đăng · C: xác nhận hoàn tất</p>
+        </div>
+        <div class="queue-footer">
+          <div class="queue-state" id="queueState">
+            <div>
+            <div id="sheetStatus" aria-live="polite">Đang tải trạng thái…</div>
+            <div id="sheetCountdown" aria-live="off"></div>
+            </div>
+          </div>
+          <div class="queue-actions">
+            <button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button>
+            <button id="btnRunNext" class="btn" type="button" title="Chạy ngay link tiếp theo trong Google Sheets mà không cần chờ">Chạy link tiếp</button>
+            <button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button>
+          </div>
+        </div>
+        <details class="direct-link">
+          <summary>Đăng một link riêng</summary>
+          <input type="text" id="urlInput" class="url-input" aria-label="Đường link Kuaishou" placeholder="Dán link Kuaishou tại đây…" autocomplete="off">
+          <p class="helper">Dán link rồi bấm “Đăng link này”. Để trống để dùng hàng đợi Google Sheets.</p>
+        </details>
+      </section>
+
+      <!-- BỘ ĐẾM NẰM GIỮA 01 VÀ 02 -->
+      <section class="card countdown-center-card" id="countdownCard" aria-label="Bộ đếm tự động">
+        <div class="clock-heading"><span>NHỊP ĐĂNG NỘI DUNG</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <div id="titleCountdown" class="title-countdown" data-state="paused" aria-label="Trạng thái hàng đợi">
+          <span id="titleCountdownValue">—</span>
+          <span id="titleCountdownLabel">Đang tải trạng thái…</span>
+        </div>
+        <div class="clock-footer"><i aria-hidden="true"></i><span id="clockInterval">Tự động theo hàng đợi của bạn</span></div>
+      </section>
+
+      <!-- 02. NƠI ĐĂNG -->
+      <section class="card platforms-card" aria-labelledby="platformHeading">
+        <div class="section-heading">
+          <div class="section-label"><h2 id="platformHeading">Kênh xuất bản</h2></div>
+          <span class="muted" id="platformSelectionCount">Đang tải…</span>
+        </div>
+        <div class="switches-container">
+          <div class="switch-card" id="swCardIG">
+            <div class="platform-lead">
+              <div class="platform-icon ig-icon" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+              </div>
+              <div class="platform-meta">
+                <span class="platform-name">Instagram</span>
+                <span class="platform-desc">Reels &amp; bộ ảnh</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="igStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Instagram"><span id="igDot" class="dot dot-gray"></span><span id="igStatusText">Đang kiểm tra…</span></button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostIG" aria-label="Đăng lên Instagram" checked><span class="slider"></span></label>
+            </div>
+          </div>
+
+          <div class="switch-card" id="swCardFB">
+            <div class="platform-lead">
+              <div class="platform-icon fb-icon" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              </div>
+              <div class="platform-meta">
+                <span class="platform-name">Facebook</span>
+                <span class="platform-desc">Qua Instagram</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="fbStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Facebook"><span id="fbDot" class="dot dot-gray"></span><span id="fbStatusText">Đang kiểm tra…</span></button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostFB" aria-label="Đăng lên Facebook" checked><span class="slider"></span></label>
+            </div>
+          </div>
+
+          <div class="switch-card" id="swCardTikTok">
+            <div class="platform-lead">
+              <div class="platform-icon tiktok-icon" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298 0 .59.043.87.126V9.4a6.33 6.33 0 0 0-.87-.06A6.33 6.33 0 0 0 3.12 15.67a6.33 6.33 0 0 0 6.33 6.33c3.49 0 6.33-2.84 6.33-6.33V9.75a8.16 8.16 0 0 0 3.81 1V7.32a4.87 4.87 0 0 1-.0-.63z"/></svg>
+              </div>
+              <div class="platform-meta">
+                <span class="platform-name">TikTok</span>
+                <span class="platform-desc">Video có nhạc</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="tiktokStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối TikTok"><span id="tiktokDot" class="dot dot-gray"></span><span id="tiktokStatusText">Đang kiểm tra…</span></button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostTikTok" aria-label="Đăng lên TikTok" checked><span class="slider"></span></label>
+            </div>
+          </div>
+
+          <div class="switch-card" id="swCardThreads">
+            <div class="platform-lead">
+              <div class="platform-icon threads-icon" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24C5.467 24 0 18.533 0 11.814 0 5.094 5.467 0 12.186 0c6.643 0 11.958 5.253 11.814 11.895-.145 6.642-5.467 11.895-12.094 11.895l.28-.001zm.006-2.222c5.385 0 9.778-4.237 9.872-9.622.093-5.385-4.218-9.622-9.603-9.622-5.467 0-9.914 4.447-9.914 9.914 0 5.467 4.447 9.33 9.645 9.33zm5.666-9.603c-.027 3.51-2.585 5.626-5.83 5.626-3.262 0-5.642-2.197-5.642-5.59 0-3.393 2.38-5.59 5.642-5.59 2.148 0 3.975 1.047 4.795 2.69l-1.932 1.15c-.47-.94-1.57-1.547-2.863-1.547-1.97 0-3.327 1.4-3.327 3.297s1.357 3.297 3.327 3.297c1.867 0 3.29-1.127 3.53-2.883h-3.53v-2.197h5.83z"/></svg>
+              </div>
+              <div class="platform-meta">
+                <span class="platform-name">Threads</span>
+                <span class="platform-desc">Ảnh &amp; video trực tiếp</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="threadsStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối Threads"><span id="threadsDot" class="dot dot-gray"></span><span id="threadsStatusText">Đang kiểm tra…</span></button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostThreads" aria-label="Đăng lên Threads" checked><span class="slider"></span></label>
+            </div>
+          </div>
+
+          <div class="switch-card" id="swCardX">
+            <div class="platform-lead">
+              <div class="platform-icon x-icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </div>
+              <div class="platform-meta">
+                <span class="platform-name">X (Twitter)</span>
+                <span class="platform-desc">Video / 4 ảnh</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="xStatusBtn" class="ig-status-pill" title="Kiểm tra kết nối X"><span id="xDot" class="dot dot-gray"></span><span id="xStatusText">Đang kiểm tra…</span></button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostX" aria-label="Đăng lên X"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+        <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook liên kết qua Instagram.</p>
+      </section>
+
+      <!-- PHẦN Ở DƯỚI: TÙY CHỌN NỘI DUNG CAO CẤP -->
+      <details class="card advanced" id="advancedPanel">
+        <summary>
+          <div class="summary-left">
+            <span>Tinh chỉnh nội dung</span>
+            <span class="summary-pill">AI Gemini · Định dạng · Ngôn ngữ</span>
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted);">Mở rộng ▾</span>
+        </summary>
+        <div class="advanced-body">
+          <div class="advanced-grid">
+            <div class="option-card">
+              <div class="option-card-title">
+                <span>Ngôn ngữ mô tả</span>
+              </div>
+              <select id="captionLangSelect">
+                <option value="en" selected>Tiếng Anh</option>
+                <option value="vi">Tiếng Việt</option>
+                <option value="both">Anh + Việt</option>
+                <option value="raw">Tiếng Trung gốc</option>
+              </select>
+              <div style="margin-top: 14px;">
+                <label class="check-field">
+                  <input type="checkbox" id="chkAsReel" checked>
+                  <span>Tạo video dọc từ bộ ảnh (Reel 9:16, nhạc tự động)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="option-card">
+              <div class="option-card-title">
+                <span>Google Gemini AI (Tạo câu chuyện)</span>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent); text-decoration: none;">Lấy key miễn phí ↗</a>
+              </div>
+              <label class="check-field" style="margin-bottom: 8px;">
+                <input type="checkbox" id="chkAddMoodText" checked>
+                <span>Chèn câu chuyện cảm xúc lên video TikTok</span>
+              </label>
+              <div class="key-input-row">
+                <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán API Key (AIzaSy...)" style="padding: 6px 10px; height: 32px; font-size: 12px;">
+                <button type="button" id="btnSaveGeminiKey" class="btn" style="padding: 0 12px; height: 32px; font-size: 11.5px; white-space: nowrap;">Lưu Key</button>
+              </div>
+              <p id="geminiKeyStatus" class="helper" style="margin: 6px 0 0; font-size: 11px;">Đang kiểm tra kết nối AI…</p>
+            </div>
+          </div>
+
+          <div id="moodTextContainer" class="option-card">
+            <div class="option-card-title">Ghi đè câu chuyện thủ công (mỗi dòng một câu · để trống để AI tự sinh)</div>
+            <textarea id="moodTextInput" class="url-input" rows="2" placeholder="Để trống: AI Gemini sẽ tự động viết câu chuyện phù hợp từng video. Hoặc tự điền từng dòng để cố định." style="font-size: 12px; line-height: 1.5;"></textarea>
+          </div>
+
+          <p class="helper" style="font-size: 11.5px; margin: 0; line-height: 1.5;">
+            Caption được tối ưu theo nội dung. Bạn có thể tùy chỉnh ngôn ngữ, câu chuyện và định dạng trước khi đăng.
+          </p>
+        </div>
+      </details>
+    </div>
+
+    <!-- SHEET PANEL TIẾN ĐỘ -->
+    <section class="card sheet-panel" id="sheetPanel" aria-labelledby="sheetHeading">
       <div class="sheet-panel-header">
-        <div><h2 id="sheetHeading">Tiến độ bảng tính</h2><p class="helper" id="sheetRowCount">Google Sheets</p></div>
+        <div><h2 id="sheetHeading">Hàng đợi nội dung</h2><p class="helper" id="sheetRowCount">Đang đồng bộ Google Sheets…</p></div>
         <div class="sheet-tools"><button type="button" id="btnReloadSheet" class="btn">Tải lại bảng</button><a id="sheetExternalLink" href="https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Mở riêng ↗</a></div>
       </div>
-      <div class="sheet-list" aria-live="polite"><table class="sheet-table" id="sheetTable" hidden><thead><tr><th style="width:48px;">Dòng</th><th>Cột A (Chờ)</th><th>Cột B (Đã đăng)</th><th style="width:54px;text-align:center;">Cột C</th></tr></thead><tbody id="sheetRows"></tbody></table><p class="sheet-list-message" id="sheetListMessage">Đang tải bảng Google Sheets…</p></div>
-      <p class="sheet-panel-note">Tự cập nhật mỗi 30 giây. Link hoàn tất sẽ tự chuyển sang Cột B và tick Cột C.</p>
+      <div class="sheet-toolbar">
+        <div class="sheet-tabs" role="group" aria-label="Lọc trạng thái nội dung"><button class="filter-btn" type="button" data-filter="all" aria-pressed="true">Tất cả</button><button class="filter-btn" type="button" data-filter="pending" aria-pressed="false">Chờ đăng</button><button class="filter-btn" type="button" data-filter="done" aria-pressed="false">Đã hoàn thành</button></div>
+        <label class="sheet-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input type="search" id="sheetSearch" placeholder="Tìm link hoặc số dòng…" aria-label="Tìm trong hàng đợi" autocomplete="off"></label>
+      </div>
+      <div class="sheet-list" aria-live="polite"><table class="sheet-table" id="sheetTable" hidden><thead><tr><th>Dòng</th><th style="width:45%">Nội dung chờ · A</th><th>Đã hoàn thành · B</th><th>✓ · C</th></tr></thead><tbody id="sheetRows"></tbody></table><p class="sheet-list-message" id="sheetListMessage">Đang tải bảng Google Sheets…</p><p class="sheet-list-message" id="sheetFilterEmpty" hidden>Không tìm thấy nội dung phù hợp.</p></div>
+      <p class="sheet-panel-note"><span>Tự đồng bộ mỗi 30 giây</span><span id="sheetUpdatedAt">Đang kết nối bảng tính…</span></p>
     </section>
     </main>
     <div id="statusBox" class="status-box" role="status" aria-live="polite"></div>
 
     <div id="resultSection" class="result-section card">
+      <div class="result-toolbar"><h2>Kết quả nội dung</h2><button type="button" class="btn" id="btnCloseResult" aria-label="Đóng kết quả nội dung">Đóng ×</button></div>
       <div class="post-header">
         <img id="authorAvatar" class="author-avatar" src="" alt="Avatar">
         <div class="post-info">
@@ -329,7 +631,6 @@
 
       <div id="gallery" class="gallery"></div>
     </div>
-    <footer>Kuaishou Studio · Mô tả không có @</footer>
   </div>
 
   <aside id="sheetReminder" class="sheet-reminder" role="status" aria-live="polite" aria-atomic="true" hidden>
@@ -354,6 +655,69 @@
     </form>
   </dialog>
   <script>
+    document.getElementById('btnCloseResult').addEventListener('click', () => { document.getElementById('resultSection').style.display = 'none'; });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+      document.getElementById('advancedPanel').open = false;
+      document.getElementById('resultSection').style.display = 'none';
+    });
+    document.getElementById('advancedPanel').addEventListener('toggle', event => {
+      event.currentTarget.querySelector('summary > span').textContent = event.currentTarget.open ? 'Thu gọn ×' : 'Mở rộng ▾';
+    });
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    document.addEventListener('pointerdown', event => {
+      const button = event.target.closest('.btn, .filter-btn');
+      if (!button || button.disabled || reducedMotion.matches) return;
+      const bounds = button.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      ripple.className = 'click-ripple';
+      ripple.setAttribute('aria-hidden', 'true');
+      ripple.style.left = `${event.clientX - bounds.left}px`;
+      ripple.style.top = `${event.clientY - bounds.top}px`;
+      button.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 600);
+    });
+    function setMetric(id, value) {
+      const element = document.getElementById(id);
+      if (element.textContent === String(value)) return;
+      element.textContent = value;
+      if (!reducedMotion.matches) element.animate([{ opacity: .3, transform: 'translateY(5px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 300, easing: 'ease-out' });
+    }
+    const studioDate = document.getElementById('studioDate');
+    studioDate.dateTime = new Date().toISOString().slice(0, 10);
+    studioDate.textContent = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+    // Use spare vertical space for editable settings on taller screens.
+    const roomyWorkspace = matchMedia('(min-width:761px) and (min-height:900px)');
+    const fitSettings = () => { document.getElementById('advancedPanel').open = roomyWorkspace.matches; };
+    roomyWorkspace.addEventListener('change', fitSettings);
+    fitSettings();
+    document.getElementById('btnOpenSettings').addEventListener('click', () => {
+      const panel = document.getElementById('advancedPanel');
+      panel.open = true;
+      panel.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+      panel.querySelector('summary').focus({ preventScroll: true });
+    });
+    document.querySelectorAll('.rail-link').forEach(link => link.addEventListener('click', () => {
+      document.querySelectorAll('.rail-link').forEach(item => item.classList.toggle('active', item === link));
+    }));
+    let activeSheetFilter = 'all';
+    function filterSheetRows() {
+      const query = document.getElementById('sheetSearch').value.trim().toLocaleLowerCase('vi');
+      const rows = [...document.querySelectorAll('#sheetRows tr')];
+      let visible = 0;
+      for (const row of rows) {
+        const matchesStatus = activeSheetFilter === 'all' || row.dataset[activeSheetFilter] === 'true';
+        row.hidden = !matchesStatus || !row.textContent.toLocaleLowerCase('vi').includes(query);
+        if (!row.hidden) visible++;
+      }
+      document.getElementById('sheetFilterEmpty').hidden = rows.length === 0 || visible > 0;
+    }
+    document.getElementById('sheetSearch').addEventListener('input', filterSheetRows);
+    document.querySelectorAll('.filter-btn').forEach(button => button.addEventListener('click', () => {
+      activeSheetFilter = button.dataset.filter;
+      document.querySelectorAll('.filter-btn').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      filterSheetRows();
+    }));
     const urlInput = document.getElementById('urlInput');
     const btnRun = document.getElementById('btnRun');
     const sheetStatus = document.getElementById('sheetStatus');
@@ -417,7 +781,13 @@
           const row = document.createElement('tr');
           row.dataset.row = String(item.row);
           row.dataset.value = item.colA || item.value || '';
+          row.dataset.pending = String(Boolean(item.colA));
+          row.dataset.done = String(Boolean(item.colB || item.colC));
           const number = document.createElement('td');
+          number.style.textAlign = 'left';
+          number.style.paddingLeft = '18px';
+          number.style.fontWeight = '600';
+          number.style.color = 'var(--text-muted)';
           number.textContent = item.row;
 
           // Cột A (Link chờ đăng)
@@ -470,12 +840,17 @@
         updateSheetRowErrors();
         const pendingCount = data.rows.filter(r => r.colA).length;
         const doneCount = data.rows.filter(r => r.colC || r.colB).length;
+        setMetric('pendingMetric', pendingCount);
+        setMetric('doneMetric', doneCount);
+        document.getElementById('sheetUpdatedAt').textContent = `Cập nhật ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`;
         document.getElementById('sheetRowCount').textContent = `${pendingCount} chờ · ${doneCount} đã đăng · Google Sheets`;
         updateSheetReminder(pendingCount);
         document.getElementById('sheetTable').hidden = data.rows.length === 0;
         message.hidden = data.rows.length > 0;
         message.textContent = 'Bảng đang trống. Mở bảng để thêm link vào cột A.';
+        filterSheetRows();
       } catch (error) {
+        document.getElementById('sheetUpdatedAt').textContent = 'Đồng bộ bị gián đoạn';
         message.hidden = false;
         message.textContent = `Không cập nhật được bảng: ${error.message}`;
       } finally { loadingSheetColumn = false; button.disabled = false; }
@@ -588,6 +963,12 @@
       sheetStage = data.stage;
       sheetStageStartedAt = data.stageStartedAt;
       sheetNextRunAt = data.nextRunAt;
+      if (Number.isFinite(data.intervalSeconds)) {
+        document.getElementById('clockInterval').textContent = data.intervalSeconds < 60
+          ? `Khoảng cách giữa hai lượt: ${data.intervalSeconds} giây`
+          : `Khoảng cách giữa hai lượt: ${Math.round(data.intervalSeconds / 60)} phút`;
+      }
+      document.getElementById('queueState').dataset.tone = data.connectionError || data.error ? 'error' : 'normal';
       document.getElementById('btnPauseQueue').hidden = !sheetEnabled || threadsOnlyMode;
       const btnRunNext = document.getElementById('btnRunNext');
       if (btnRunNext) {
@@ -606,6 +987,7 @@
       sheetStatus.textContent = data.connectionError
         || data.error
         || `${queueMessage}${!data.running && latestWarning ? ` · ${latestWarning}` : ''}`;
+      sheetStatus.title = sheetStatus.textContent;
     }
 
     async function refreshSheetQueue() {
@@ -813,6 +1195,10 @@
 
     // Toggle switch UI states & button text update
     function updateSwitchUI() {
+      const selectedCount = [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX]
+        .filter(input => input.checked && input.closest('.switch-card').style.display !== 'none').length;
+      setMetric('channelsMetric', selectedCount);
+      document.getElementById('platformSelectionCount').textContent = `${selectedCount} đang chọn`;
       swCardIG.classList.toggle('active-ig', chkAutoPostIG.checked);
       swCardTikTok.classList.toggle('active-tiktok', chkAutoPostTikTok.checked);
       swCardFB.classList.toggle('active-fb', chkAutoPostFB.checked);

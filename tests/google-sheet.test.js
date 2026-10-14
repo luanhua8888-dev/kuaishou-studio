@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { createGoogleSheet } from '../google-sheet.js';
+import { createGoogleSheet } from '../src/queue/google-sheet.js';
 
 test('reads column A and clears the completed cell with an editor token', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'google-sheet-'));

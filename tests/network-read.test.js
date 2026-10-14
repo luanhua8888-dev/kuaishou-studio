@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { networkRead, mapLimit } from '../network-read.js';
+import { networkRead, mapLimit } from '../src/network/network-read.js';
 
 test('retries an interrupted body and returns only the completed read', async () => {
   let calls = 0;

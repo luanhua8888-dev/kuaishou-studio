@@ -1,7 +1,7 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publishPlatforms } from '../publish-platforms.js';
-import { UPLOAD_INPUT_UNAVAILABLE } from '../instagram-upload.js';
+import { publishPlatforms } from '../src/platforms/publish.js';
+import { UPLOAD_INPUT_UNAVAILABLE } from '../src/platforms/instagram/upload.js';
 
 const options = { autoPostIG: true, autoPostFB: true, autoPostTikTok: true, autoPostThreads: true };
 const media = { imagePaths: ['video.mp4'], videoPath: 'video.mp4', caption: 'Một khoảnh khắc' };

@@ -1,7 +1,7 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { requestPipeline } from '../pipeline-request.js';
+import { requestPipeline } from '../src/queue/pipeline-request.js';
 
 test('waits for a delayed local result and preserves partial platform results', async t => {
   let received;
@@ -28,4 +28,16 @@ test('reports a local pipeline error without replaying the request', async t => 
   t.after(() => new Promise(resolve => server.close(resolve)));
   await assert.rejects(requestPipeline(server.address().port, {}), /Không tải được CDN/);
   assert.equal(calls, 1);
+});
+
+test('preserves the failure stage so only preparation failures can be retried', async t => {
+  const server = http.createServer((req, res) => {
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: 'CDN timeout', code: 'NETWORK_READ_FAILED', failureStage: 'prepare' }));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await assert.rejects(requestPipeline(server.address().port, {}), {
+    code: 'NETWORK_READ_FAILED', failureStage: 'prepare', message: 'CDN timeout',
+  });
 });

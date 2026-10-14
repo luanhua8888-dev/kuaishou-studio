@@ -5,7 +5,7 @@ import {
   buildGeminiPrompt,
   parseGeminiStoryResponse,
   generateAIStoryScenes
-} from '../ai-story.js';
+} from '../src/content/ai-story.js';
 
 test('resolveGeminiApiKey retrieves explicit key, env var, or empty fallback', () => {
   assert.equal(resolveGeminiApiKey('AIzaSyTest123'), 'AIzaSyTest123');

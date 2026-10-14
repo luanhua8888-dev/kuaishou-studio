@@ -1,11 +1,11 @@
+import { PROJECT_ROOT } from '../src/paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createTikTokSlideshow } from './tiktok-slideshow.js';
+import { createTikTokSlideshow } from '../src/media/tiktok-slideshow.js';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
+const root = PROJECT_ROOT;
 const source = path.resolve(process.argv[2] || path.join(root, 'downloads/_5216575952998412128'));
-const configPath = path.resolve(process.argv[3] || path.join(root, 'tiktok-slideshow.norway.example.json'));
+const configPath = path.resolve(process.argv[3] || path.join(root, 'config/tiktok-slideshow.norway.example.json'));
 const output = path.resolve(process.argv[4] || path.join(root, 'artifacts/tiktok-landscape-sample.mp4'));
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const files = fs.readdirSync(source).filter(f => /^image_.*\.(jpg|jpeg|png|webp)$/i.test(f)).sort();

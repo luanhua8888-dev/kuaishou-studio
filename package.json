@@ -3,16 +3,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node download_kuaishou.js",
+    "start": "node scripts/download.mjs",
     "test": "node --test tests/*.test.js",
     "ui": "node server.js",
     "ui:threads": "node server.js --port=3001 --threads-only",
     "ui:tiktok": "node server.js --port=3003 --tiktok-only",
-    "render:tiktok": "node render-tiktok-sample.mjs",
+    "render:tiktok": "node scripts/render-tiktok-sample.mjs",
     "ui:all": "node server.js --port=3002",
-    "test:threads-api": "node verify-threads-api.mjs",
-    "ig:login": "node ig_poster.js login",
-    "threads:login": "node threads_poster.js login",
+    "test:threads-api": "node scripts/verify-threads-api.mjs",
+    "test:ui": "node scripts/verify-studio-ui.mjs",
+    "ig:login": "node src/platforms/instagram/poster.js login",
+    "tiktok:login": "node src/platforms/tiktok/poster.js login",
+    "threads:login": "node src/platforms/threads/poster.js login",
     "ui:x": "node server.js --port=3004 --x-only"
   },
   "dependencies": {

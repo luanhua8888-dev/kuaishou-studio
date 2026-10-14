@@ -1,4 +1,4 @@
-import { UPLOAD_INPUT_UNAVAILABLE } from './instagram-upload.js';
+import { UPLOAD_INPUT_UNAVAILABLE } from './instagram/upload.js';
 
 // Attempt each selected destination even if another destination fails.
 export async function publishPlatforms(options, media, posters, progress = () => {}) {

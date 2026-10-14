@@ -1,18 +1,16 @@
+import { PROJECT_ROOT } from '../../paths.js';
 import { chromium } from 'playwright';
-import { openInstagramUpload } from './instagram-upload.js';
-import { confirmInstagramPost } from './instagram-confirmation.js';
-import { disableInstagramThreadsSharing } from './instagram-sharing.js';
-import { removeCaptionMentions } from './caption-text.js';
-import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
+import { openInstagramUpload } from './upload.js';
+import { confirmInstagramPost } from './confirmation.js';
+import { disableInstagramThreadsSharing } from './sharing.js';
+import { removeCaptionMentions } from '../../content/caption-text.js';
+import { sanitizeVideoAudioForCopyright } from '../../media/anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-export const AUTH_FILE = path.join(__dirname, 'ig_auth.json');
+export const AUTH_FILE = path.join(PROJECT_ROOT, 'ig_auth.json');
 
 /**
  * Check if the saved session is already logged into Instagram
@@ -473,7 +471,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     await shareBtn.waitFor({ state: 'visible', timeout: 10000 });
 
     if (prepareOnly) {
-      await page.screenshot({ path: path.join(__dirname, 'ig_preflight.png') });
+      await page.screenshot({ path: path.join(PROJECT_ROOT, 'ig_preflight.png') });
       await browser.close();
       return { success: false, prepared: true, facebookShared };
     }
@@ -491,7 +489,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
   } catch (err) {
     console.error('[Instagram] Lỗi đăng bài:', err.message);
     try {
-      await page.screenshot({ path: path.join(__dirname, 'ig_error.png') });
+      await page.screenshot({ path: path.join(PROJECT_ROOT, 'ig_error.png') });
     } catch {}
     await browser.close();
     throw err;

@@ -1,15 +1,13 @@
+import { PROJECT_ROOT } from '../../paths.js';
 import { chromium } from 'playwright';
-import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './tiktok-upload.js';
-import { removeCaptionMentions } from './caption-text.js';
-import { sanitizeVideoAudioForCopyright } from './anti-copyright.js';
+import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './upload.js';
+import { removeCaptionMentions } from '../../content/caption-text.js';
+import { sanitizeVideoAudioForCopyright } from '../../media/anti-copyright.js';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-export const AUTH_FILE = path.join(__dirname, 'tiktok_auth.json');
+export const AUTH_FILE = path.join(PROJECT_ROOT, 'tiktok_auth.json');
 
 /**
  * Check if the saved session is already logged into TikTok
@@ -259,7 +257,7 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
   } catch (err) {
     console.error('[TikTok] Lỗi đăng bài TikTok:', err.message);
     try {
-      await page.screenshot({ path: path.join(__dirname, 'tiktok_error.png'), fullPage: true });
+      await page.screenshot({ path: path.join(PROJECT_ROOT, 'tiktok_error.png'), fullPage: true });
     } catch {}
     await browser.close();
     throw err;

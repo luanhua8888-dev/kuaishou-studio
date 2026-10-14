@@ -1,11 +1,11 @@
+import { PROJECT_ROOT } from '../../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import twitterText from 'twitter-text';
-import { removeCaptionMentions } from './caption-text.js';
-import { xOAuth } from './x-oauth.js';
+import { removeCaptionMentions } from '../../content/caption-text.js';
+import { xOAuth } from './oauth.js';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
+const root = PROJECT_ROOT;
 export const AUTH_FILE = path.join(root, 'x_auth.json');
 const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4' };
 

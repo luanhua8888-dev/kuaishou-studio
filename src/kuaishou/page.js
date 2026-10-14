@@ -1,6 +1,6 @@
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 
-import { networkRead } from './network-read.js';
+import { networkRead } from '../network/network-read.js';
 
 export function parseInitState(html) {
   const match = html.match(/window\.INIT_STATE\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/i);

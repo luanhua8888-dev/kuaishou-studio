@@ -1,10 +1,11 @@
 import fs from 'node:fs';
+import { PROJECT_ROOT } from '../paths.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 import { renderWithCache } from './render-cache.js';
-import { generateAIStoryScenes } from './ai-story.js';
+import { generateAIStoryScenes } from '../content/ai-story.js';
 
 const run = promisify(execFile);
 const FPS = 30;
@@ -25,7 +26,7 @@ const number = (value, fallback, min, max, name) => {
 };
 
 export function readTikTokSlideshowConfig(overrides = {}) {
-  const file = new URL('./tiktok-slideshow.config.json', import.meta.url);
+  const file = path.join(PROJECT_ROOT, 'tiktok-slideshow.config.json');
   const saved = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   return { ...saved, ...overrides, text: { ...saved.text, ...overrides.text }, audio: { ...saved.audio, ...overrides.audio } };
 }

@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { relevantHashtags, ensureCaptionHashtags } from '../relevance-tags.js';
+import { relevantHashtags, ensureCaptionHashtags } from '../src/content/relevance-tags.js';
 
 test('uses only topic tags supported by the title', () => {
   const vi = relevantHashtags('Một chú mèo trong vườn hoa', 'vi').split(' ');

@@ -1,7 +1,7 @@
 ﻿import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { confirmThreadsPost } from '../threads-confirmation.js';
+import { confirmThreadsPost } from '../src/platforms/threads/confirmation.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });

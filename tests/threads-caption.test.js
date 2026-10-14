@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildThreadsCaption, threadsTopic } from '../threads-caption.js';
+import { buildThreadsCaption, threadsTopic } from '../src/content/threads-caption.js';
 
 test('Threads keeps relevant hashtags, removes mentions and invites a relevant response', () => {
   const text = buildThreadsCaption('A peaceful forest @creator\n\n#nature #landscape');

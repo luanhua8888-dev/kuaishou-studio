@@ -1,10 +1,8 @@
+import { PROJECT_ROOT } from '../src/paths.js';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
 
@@ -271,7 +269,7 @@ async function downloadFile(url, destPath) {
 /**
  * Main handler to download media from a Kuaishou link
  */
-export async function downloadKuaishou(inputUrl, outputDir = path.join(__dirname, 'downloads')) {
+export async function downloadKuaishou(inputUrl, outputDir = path.join(PROJECT_ROOT, 'downloads')) {
   const rawUrl = extractUrl(inputUrl);
   if (!rawUrl) {
     console.error('[Lỗi] Không tìm thấy URL hợp lệ trong chuỗi nhập vào!');

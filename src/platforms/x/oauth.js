@@ -1,9 +1,9 @@
+import { PROJECT_ROOT } from '../../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { randomBytes, createHash } from 'node:crypto';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
+const root = PROJECT_ROOT;
 export const CLIENT_FILE = path.join(root, '.x-client.json');
 export const X_SCOPES = ['tweet.read', 'tweet.write', 'users.read', 'media.write', 'offline.access'];
 

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import twitterText from 'twitter-text';
-import { createXClient, prepareXCaption } from '../x_poster.js';
+import { createXClient, prepareXCaption } from '../src/platforms/x/poster.js';
 
 function fixture(t, responses) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'x-poster-'));

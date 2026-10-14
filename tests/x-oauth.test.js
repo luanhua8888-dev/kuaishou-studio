@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
-import { createXOAuth, X_SCOPES } from '../x-oauth.js';
+import { createXOAuth, X_SCOPES } from '../src/platforms/x/oauth.js';
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'x-oauth-'));
