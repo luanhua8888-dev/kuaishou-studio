@@ -9,7 +9,7 @@ import { generateAIStoryScenes } from '../content/ai-story.js';
 
 const run = promisify(execFile);
 const FPS = 30;
-const VERSION = 2;
+const VERSION = 3;
 const DEFAULT_STORY = [
   'Nếu được đi trốn một ngày, mình muốn đến đây.',
   'Giữa thiên nhiên, mọi thứ như chậm lại…',
@@ -96,7 +96,10 @@ async function layoutTexts(texts, config) {
   const position = number(config.positionY, 0.68, 0, 1, 'text.positionY');
   // Centre on the actual video, while respecting the larger of both safe margins.
   const width = 1080 - 2 * Math.max(marginLeft, marginRight) - 40;
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+  });
   let layouts;
   try {
     const page = await browser.newPage();
@@ -164,7 +167,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
     return i === 0 || beat !== previous ? (story[beat] || '') : '';
   });
   const layout = await layoutTexts(texts, config.text || {});
-  const zoom = number(config.zoomAmount, 0.035, 0, 0.04, 'zoomAmount');
+  const zoom = number(config.zoomAmount, 0, 0, 0.04, 'zoomAmount');
   const volume = number(config.audio?.volume, 1.0, 0, 1, 'audio.volume');
   const audioFade = Math.min(plan.duration / 2, number(config.audio?.fadeSeconds, 0.5, 0, 2, 'audio.fadeSeconds'));
   const hasAudio = Boolean(audioPath && fs.existsSync(audioPath));
@@ -173,22 +176,44 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
   const temp = fs.mkdtempSync(path.join(outputDir, '.tiktok-slideshow-'));
   try {
     return await renderWithCache(outputPath, [...selected, hasAudio ? audioPath : null, layout.font], { config, version: VERSION, texts }, async () => {
-      const clips = [];
-      for (const scene of plan.scenes) {
-        console.log(`[TikTok Slideshow] Dựng cảnh ${scene.index + 1}/${plan.scenes.length}…`);
+      console.log(`[TikTok Slideshow] Dựng đồng thời ${plan.scenes.length} cảnh đa luồng…`);
+      const sceneTasks = plan.scenes.map(async scene => {
         const frame = path.join(temp, `frame-${scene.index}.png`);
         // Only the decorative background is cropped; foreground fits inside motion margins.
-        await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', selected[scene.index], '-filter_complex',
+        await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '0', '-i', selected[scene.index], '-filter_complex',
           '[0:v]split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:3,eq=brightness=-0.15[back];[fg]scale=1000:1760:force_original_aspect_ratio=decrease:flags=lanczos[front];[back][front]overlay=(W-w)/2:(H-h)/2,setsar=1[out]',
           '-map', '[out]', '-frames:v', '1', frame]);
         const clip = path.join(temp, `scene-${scene.index}.mp4`);
-        const progress = `on/${Math.max(1, scene.frames - 1)}`;
-        const z = scene.index % 2 ? `1+${zoom}*(1-${progress})` : `1+${zoom}*${progress}`;
-        // Zoom is bounded by the inset; subjects at image edges remain visible.
-        const motion = `scale=2160:3840,zoompan=z='${z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=${scene.frames}:s=1080x1920:fps=30,setsar=1`;
-        await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', frame, '-vf', motion, '-frames:v', String(scene.frames), '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', clip], { maxBuffer: 8 * 1024 * 1024 });
-        clips.push(clip);
-      }
+        if (zoom <= 0) {
+          await run('ffmpeg', [
+            '-hide_banner', '-loglevel', 'error', '-y', '-threads', '0',
+            '-framerate', '30', '-loop', '1', '-i', frame,
+            '-t', String(scene.frames / FPS),
+            '-frames:v', String(scene.frames),
+            '-r', '30', '-g', '60', '-keyint_min', '30', '-sc_threshold', '0',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+            clip
+          ], { maxBuffer: 8 * 1024 * 1024 });
+        } else {
+          const progress = `on/${Math.max(1, scene.frames - 1)}`;
+          const z = scene.index % 2 ? `1+${zoom}*(1-${progress})` : `1+${zoom}*${progress}`;
+          // Zoom is bounded by the inset; subjects at image edges remain visible.
+          const motion = `scale=2160:3840,zoompan=z='${z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=${scene.frames}:s=1080x1920:fps=30,setsar=1`;
+          await run('ffmpeg', [
+            '-hide_banner', '-loglevel', 'error', '-y', '-threads', '0',
+            '-framerate', '30', '-i', frame,
+            '-vf', motion,
+            '-frames:v', String(scene.frames),
+            '-r', '30', '-g', '60', '-keyint_min', '30', '-sc_threshold', '0',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+            clip
+          ], { maxBuffer: 8 * 1024 * 1024 });
+        }
+        return { index: scene.index, clip };
+      });
+      const renderedScenes = await Promise.all(sceneTasks);
+      renderedScenes.sort((a, b) => a.index - b.index);
+      const clips = renderedScenes.map(s => s.clip);
       const args = ['-hide_banner', '-loglevel', 'error', '-y'];
       for (const clip of clips) args.push('-i', clip);
       args.push(...(hasAudio ? ['-stream_loop', '-1', '-i', audioPath] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']));
@@ -221,7 +246,35 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       filters.push(`[${last}]${textFilters.length ? textFilters.join(',') + ',' : ''}fps=30,format=yuv420p[out]`);
       filters.push(`[${clips.length}:a]volume=${volume},apad,atrim=duration=${plan.duration},asetpts=PTS-STARTPTS${audioFade ? `,afade=t=in:d=${audioFade},afade=t=out:st=${plan.duration - audioFade}:d=${audioFade}` : ''}[audio]`);
       const script = path.join(temp, 'filters.txt'); fs.writeFileSync(script, filters.join(';\n'));
-      args.push('-filter_complex_threads', '1', '-filter_complex', filters.join(';'), '-map', '[out]', '-map', '[audio]', '-t', String(plan.duration), '-r', '30', '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outputPath);
+      args.push(
+        '-threads', '0',
+        '-filter_complex', filters.join(';'),
+        '-map', '[out]',
+        '-map', '[audio]',
+        '-t', String(plan.duration),
+        '-r', '30',
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '18',
+        '-profile:v', 'high',
+        '-level', '4.2',
+        '-g', '60',
+        '-keyint_min', '30',
+        '-sc_threshold', '0',
+        '-b:v', '6M',
+        '-maxrate', '8M',
+        '-bufsize', '12M',
+        '-pix_fmt', 'yuv420p',
+        '-colorspace', 'bt709',
+        '-color_primaries', 'bt709',
+        '-color_trc', 'bt709',
+        '-color_range', 'tv',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '44100',
+        '-movflags', '+faststart',
+        outputPath
+      );
       await run('ffmpeg', args, { maxBuffer: 8 * 1024 * 1024 });
       fs.writeFileSync(`${outputPath}.story.json`, JSON.stringify({ ...plan, order, sourceImages: selected, captions: layout.layouts, config }, null, 2));
     });

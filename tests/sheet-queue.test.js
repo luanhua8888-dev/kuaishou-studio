@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -410,5 +410,33 @@ test('runNextNow runs next link immediately skipping delay', async t => {
   queue.configure({ runNextNow: true });
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls, ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second']);
+  queue.stop();
+});
+
+test('restartFromFirst resets cursor to 1, clears previous items, and runs immediately', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-queue-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const settingsPath = path.join(dir, '.setting');
+  fs.writeFileSync(settingsPath, JSON.stringify({ intervalSeconds: 3600 }));
+  const cells = ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/second'];
+  const calls = [];
+  const queue = createSheetQueue({
+    statePath: path.join(dir, 'state.json'), settingsPath,
+    sheet: { readColumn: async () => cells, clearCell: async (_, row) => { cells[row - 1] = ''; } },
+    runPipeline: async url => { calls.push(url); return { success: true }; },
+    schedule: () => ({ unref() {} })
+  });
+  queue.start();
+  queue.configure({ enabled: true, runNow: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['https://v.kuaishou.com/first']);
+  assert.equal(queue.snapshot().cursor, 2);
+
+  // Put a new link in row 1 and trigger restartFromFirst
+  cells[0] = 'https://v.kuaishou.com/first-again';
+  queue.configure({ restartFromFirst: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['https://v.kuaishou.com/first', 'https://v.kuaishou.com/first-again']);
+  assert.equal(queue.snapshot().cursor, 2);
   queue.stop();
 });

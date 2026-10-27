@@ -12,6 +12,11 @@ import { exec } from 'child_process';
 
 export const AUTH_FILE = path.join(PROJECT_ROOT, 'ig_auth.json');
 
+function getChromiumExecutable() {
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  return ['/usr/bin/chromium-browser', '/usr/bin/chromium'].find(p => fs.existsSync(p));
+}
+
 /**
  * Check if the saved session is already logged into Instagram
  */
@@ -39,9 +44,14 @@ export async function interactiveLogin() {
 
   let browser = null;
   try {
+    const execPath = getChromiumExecutable();
     browser = await chromium.launch({
       headless: false,
+      ...(execPath ? { executablePath: execPath } : {}),
       args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
         '--start-maximized'
       ]
@@ -198,9 +208,14 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
   }
 
   console.log(`\n[Instagram] Bắt đầu đăng ${sanitizedUploadPaths.length} file lên Instagram...`);
+  const execPath = getChromiumExecutable();
   const browser = await chromium.launch({
     headless: headless,
+    ...(execPath ? { executablePath: execPath } : {}),
     args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
       '--disable-blink-features=AutomationControlled',
       '--start-maximized'
     ]

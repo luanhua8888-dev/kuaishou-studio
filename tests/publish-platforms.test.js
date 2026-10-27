@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { publishPlatforms } from '../src/platforms/publish.js';
 import { UPLOAD_INPUT_UNAVAILABLE } from '../src/platforms/instagram/upload.js';
@@ -45,6 +45,14 @@ test('Threads receives its own optimized caption without changing other platform
   await publishPlatforms(options, { ...media, threadsCaption: 'A quiet moment\n#nature' }, {
     instagram: async input => { assert.equal(input.caption, media.caption); return { success: true, facebookShared: true }; },
     tiktok: async input => { assert.equal(input.caption, media.caption); return { success: true }; },
+    threads: async input => { assert.equal(input.caption, 'A quiet moment\n#nature'); return { success: true }; }
+  });
+});
+
+test('TikTok receives its own Vietnamese caption without changing other platforms', async () => {
+  await publishPlatforms(options, { ...media, caption: 'A quiet moment\n#nature', tiktokCaption: 'Khoảnh khắc bình yên\n#phongcanh' }, {
+    instagram: async input => { assert.equal(input.caption, 'A quiet moment\n#nature'); return { success: true, facebookShared: true }; },
+    tiktok: async input => { assert.equal(input.caption, 'Khoảnh khắc bình yên\n#phongcanh'); return { success: true }; },
     threads: async input => { assert.equal(input.caption, 'A quiet moment\n#nature'); return { success: true }; }
   });
 });

@@ -2,7 +2,7 @@
   "durationSeconds": 14,
   "secondsPerImage": 2.6,
   "transitionSeconds": 0.3,
-  "zoomAmount": 0.035,
+  "zoomAmount": 0,
   "text": {
     "fontSize": 44,
     "positionY": 0.68,

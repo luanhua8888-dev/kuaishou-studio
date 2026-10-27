@@ -1,34 +1,29 @@
-google-service-account.json
-*service-account*.json
-loginwithjavascript-9e6aeee932b4.json
-sheet-queue-state.json
-sheet-queue-state.json.tmp
-sheet-queue-tiktok-state.json
-sheet-queue-tiktok-state.json.tmp
+# Logs & Runtime states
+logs/
+*.log
+*.tmp
+sheet-queue*.json
+
+# Dependencies & Package Managers
 node_modules/
+.pnpm-store/
+
+# Downloads & Outputs
 downloads/
 artifacts/
+*.zip
+
+# Auth & Credentials
+google-service-account*.json
+*service-account*.json
+loginwithjavascript*.json
+*_auth.json
 .setting
 .env
 .env.*
-ig_auth.json
-tiktok_auth.json
-*_auth.json
-scratch_*
-*.log
-after_turning_off_crosspost.png
-ig_error.png
-ig_preflight.png
-threads_error.png
-tiktok_preview.png
-ui_preview.png
-test_mood.txt
-test_fonts.js
-test_*.png
-test_vn.txt
-launch-9router.ps1
-
-sheet-queue-x-state.json
-sheet-queue-x-state.json.tmp
 .x-client.json
-x_auth.json.tmp
+
+# Temporary & Test files
+scratch_*
+test_*
+*.png

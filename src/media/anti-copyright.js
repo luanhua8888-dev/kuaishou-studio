@@ -33,9 +33,9 @@ export async function sanitizeVideoAudioForCopyright(videoPath) {
 
     console.log(`[Bản quyền] Đang áp dụng bộ lọc lách bản quyền âm thanh (pitch shift +4.5%) cho: ${path.basename(videoPath)}...`);
     await new Promise((resolve, reject) => {
-      exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "rubberband=pitch=1.045" -c:a aac -b:a 192k "${safeVideoPath}"`, (err) => {
+      exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "rubberband=pitch=1.045" -c:a aac -b:a 192k -avoid_negative_ts make_zero -movflags +faststart "${safeVideoPath}"`, (err) => {
         if (err) {
-          exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "asetrate=44100*1.045,aresample=44100,atempo=1/1.045" -c:a aac -b:a 192k "${safeVideoPath}"`, (err2) => {
+          exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "asetrate=44100*1.045,aresample=44100,atempo=1/1.045" -c:a aac -b:a 192k -avoid_negative_ts make_zero -movflags +faststart "${safeVideoPath}"`, (err2) => {
             if (err2) reject(err2);
             else resolve();
           });

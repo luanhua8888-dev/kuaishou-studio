@@ -1148,9 +1148,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       const slideshowCaption = readTikTokSlideshowConfig(slideshowConfig).caption;
-      const captionText = customCaption !== undefined || slideshowCaption !== undefined
-        ? removeCaptionMentions(customCaption ?? slideshowCaption)
-        : ensureCaptionHashtags(removeCaptionMentions(post.title), 'en', post.title);
+      let captionText;
+      if (customCaption !== undefined && customCaption.trim() !== '') {
+        captionText = removeCaptionMentions(customCaption);
+      } else if (slideshowCaption !== undefined && slideshowCaption.trim() !== '') {
+        captionText = removeCaptionMentions(slideshowCaption);
+      } else {
+        const generatedVi = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, 'vi');
+        captionText = generatedVi.fullText;
+      }
       await postToTikTok({
         videoPath: targetVideo,
         caption: captionText,
@@ -1306,6 +1312,14 @@ const server = http.createServer(async (req, res) => {
       setPipelineProgress(jobId, 'Đang chuẩn bị caption và hashtag…');
       const generated = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, captionLang);
       const finalCaption = ensureCaptionHashtags(removeCaptionMentions((customCaption !== undefined && customCaption.trim() !== '') ? customCaption : generated.fullText), captionLang, post.title);
+      const generatedVi = captionLang === 'vi'
+        ? generated
+        : await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, 'vi');
+      const tiktokCaption = (customCaption !== undefined && customCaption.trim() !== '')
+        ? removeCaptionMentions(customCaption)
+        : ((tikTokConfig?.caption && tikTokConfig.caption.trim() !== '')
+            ? removeCaptionMentions(tikTokConfig.caption)
+            : ensureCaptionHashtags(generatedVi.fullText, 'vi', post.title));
       const finalMoodQuoteVi = enableMoodQuote !== false 
         ? (moodQuote !== undefined && moodQuote.trim() !== '' ? cleanPureText(moodQuote) : (generated.moodQuoteVi || generated.moodQuote || '')) 
         : '';
@@ -1408,8 +1422,8 @@ const server = http.createServer(async (req, res) => {
       publishingStarted = true;
       const published = await publishPlatforms(
         { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads, autoPostX },
-        { imagePaths: uploadPaths, videoPath: targetVideo, caption: finalCaption, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
-        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: customCaption?.trim() ? removeCaptionMentions(customCaption) : (tikTokConfig?.caption ?? args.caption) }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }) },
+        { imagePaths: uploadPaths, videoPath: targetVideo, caption: finalCaption, tiktokCaption, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
+        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: args.caption ?? tiktokCaption }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }) },
         message => setPipelineProgress(jobId, message)
       );
 

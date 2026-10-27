@@ -68,21 +68,34 @@
     .sheet-top a { font-size:10px; font-weight:700; text-decoration:none; white-space:nowrap; }
     .sheet-top a:hover { text-decoration:underline; }
     .sheet-source .helper { margin:9px 0 0 39px; font-size:10px; line-height:1.7; }
-    .queue-footer { display:flex; flex-direction:column; gap:15px; margin-top:15px; }
-    .queue-state { display:flex; gap:8px; align-items:baseline; }
-    .queue-state::before { content:''; display:block; width:6px; height:6px; border-radius:50%; background:#b5c1ac; flex:none; }
-    .queue-state[data-tone=error]::before { background:#c46550; }
-    .queue-state[data-tone=error] #sheetStatus { color:#9b5848; }
-    #sheetStatus { font-size:11px; font-weight:500; color:#6d7b70; overflow-wrap:anywhere; line-height:1.7; }
-    #sheetCountdown { color:var(--text-muted); font-size:10px; margin-top:4px; font-variant-numeric:tabular-nums; }
-    .queue-actions { display:flex; flex-wrap:wrap; gap:8px; }
-    .queue-actions .btn { flex:1; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 15px; min-height:40px; border:1px solid #dde4d9; border-radius:9px; background:#fff; color:var(--text-main); font-size:11px; font-weight:700; text-decoration:none; white-space:nowrap; transition:background .18s,transform .18s,border-color .18s; }
-    .btn:hover { background:#f1f5ec; border-color:#b9c9b1; }
-    .btn:active { transform:translateY(1px); }
-    .btn-primary { background:var(--primary); color:white; border-color:var(--primary); box-shadow:0 3px 6px #234b3920; }
-    .btn-primary:hover { background:var(--primary-hover); border-color:var(--primary-hover); }
-    #btnRun::before { content:'▶'; font-size:8px; }
+    .queue-footer { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+    .queue-state { display:flex; align-items:center; gap:7px; padding:5px 9px; border-radius:8px; background:#f2f5ee; border:1px solid #dfe5dc; min-height:26px; }
+    .queue-state::before { content:''; display:block; width:6px; height:6px; border-radius:50%; background:#8e9e8c; flex:none; transition:all .2s ease; }
+    .queue-state[data-state=running]::before { background:#2ea043; box-shadow:0 0 0 2px rgba(46,160,67,0.25); animation:pulse-dot 1.6s infinite; }
+    .queue-state[data-state=waiting]::before { background:#3b704f; }
+    .queue-state[data-tone=error]::before { background:#cf4830; box-shadow:0 0 0 2px rgba(207,72,48,0.25); }
+    .queue-state[data-tone=error] { background:#fdf2f0; border-color:#f2d1cb; }
+    .queue-state[data-tone=error] #sheetStatus { color:#9c3c28; }
+    #sheetStatus { font-size:10.5px; font-weight:600; color:#58685b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.4; flex:1; }
+    #sheetCountdown { color:var(--text-muted); font-size:10px; font-variant-numeric:tabular-nums; }
+    @keyframes pulse-dot { 0%,100% { transform:scale(1); opacity:1; } 50% { transform:scale(1.25); opacity:.7; } }
+    .queue-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    .queue-actions .btn { min-width:0; min-height:31px; padding:5px 8px; font-size:10.5px; font-weight:700; border-radius:8px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:8px 12px; min-height:34px; border:1px solid #dbe2d7; border-radius:8px; background:#fff; color:var(--text-main); font-size:11px; font-weight:700; text-decoration:none; white-space:nowrap; transition:background .16s,border-color .16s,transform .14s,box-shadow .16s; box-shadow:0 1px 2px rgba(20,40,25,0.04); }
+    .btn:hover { background:#f4f7f2; border-color:#b8c8b3; transform:translateY(-1px); box-shadow:0 2px 6px rgba(20,40,25,0.07); }
+    .btn:active { transform:translateY(0); box-shadow:0 1px 2px rgba(20,40,25,0.04); }
+    .btn-primary { background:linear-gradient(180deg,#244f3b 0%,#1c3f2f 100%); color:#fff; border-color:#173729; box-shadow:0 2px 6px rgba(28,63,47,0.2),inset 0 1px 0 rgba(255,255,255,0.15); }
+    .btn-primary:hover { background:linear-gradient(180deg,#2b5c45 0%,#204634 100%); border-color:#142f23; color:#fff; }
+    #btnRun { grid-column:1/-1; }
+    #btnRun::before { content:'▶'; font-size:8px; margin-right:1px; }
+    #btnRun[data-mode="direct"]::before { content:'↗'; font-size:11px; font-weight:800; }
+    #btnPauseQueue { grid-column:1/-1; background:#fdf6ec; color:#92541a; border-color:#ecd7bf; box-shadow:0 1px 3px rgba(146,84,26,0.08); }
+    #btnPauseQueue:hover { background:#faeedb; border-color:#dfc29f; color:#794310; }
+    #btnPauseQueue::before { content:'⏸'; font-size:9px; margin-right:1px; }
+    #btnRunNext::before { content:'⏭'; font-size:9px; margin-right:1px; }
+    #btnRestartQueue::before { content:'↺'; font-size:11px; font-weight:800; line-height:1; margin-right:1px; }
+    .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnRun { grid-column:1; }
+    .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnPauseQueue { grid-column:2; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
     .direct-link { border-top:1px solid #edf0e9; padding-top:12px; margin-top:15px; }
     summary { cursor:pointer; font-size:11px; font-weight:600; color:#72816f; }
@@ -233,13 +246,15 @@
     .source-name { font-size:12px; gap:8px; }
     .source-icon { width:27px; height:29px; }
     .sheet-source .helper { margin:5px 0 0; font-size:9px; line-height:1.5; }
-    .queue-footer { margin:0; min-width:0; gap:6px; }
-    .queue-state { min-height:16px; max-height:48px; flex-shrink:0; overflow:auto; scrollbar-width:thin; }
-    #sheetStatus { font-size:10px; line-height:16px; }#sheetCountdown { display:none; }
-    .queue-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
-    .queue-actions .btn { min-width:0; min-height:32px; padding:5px 8px; font-size:10px; }
-    #btnRun { grid-column:1/-1; grid-row:1; }
-    .queue-actions:has(#btnPauseQueue[hidden]) #btnRunNext { grid-column:1/-1; }
+    .queue-footer { margin:0; min-width:0; gap:5px; }
+    .queue-state { min-height:22px; max-height:26px; padding:3px 7px; flex-shrink:0; }
+    #sheetStatus { font-size:9.5px; line-height:1.3; }#sheetCountdown { display:none; }
+    .queue-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+    .queue-actions .btn { min-width:0; min-height:28px; padding:3px 6px; font-size:9.5px; border-radius:7px; }
+    #btnRun { grid-column:1/-1; }
+    #btnPauseQueue { grid-column:1/-1; }
+    .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnRun { grid-column:1; }
+    .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnPauseQueue { grid-column:2; }
     .direct-link { margin:0; padding-top:6px; }
     .direct-link summary { font-size:10px; }
     .direct-link[open]>summary { margin-bottom:8px; }
@@ -300,8 +315,10 @@
       .workspace { display:flex; flex-direction:column; gap:8px; overflow:auto; padding:0 1px 4px; scrollbar-width:thin; scroll-behavior:smooth; }
       .controls-column { display:contents; }.workspace>.card,.controls-column>.card { flex:none; width:100%; }
       .source-card { order:1; }.countdown-center-card { order:2; }.sheet-panel { order:3; }.platforms-card { order:4; }.advanced { order:5; }
-      .queue-actions { grid-template-columns:1fr 1.25fr; }.queue-actions .btn { min-height:38px; font-size:11px; }
-      #btnRun { grid-column:1/-1; }.queue-actions:has(#btnPauseQueue[hidden]) #btnRun { grid-column:2; }.queue-actions:has(#btnPauseQueue[hidden]) #btnRunNext { grid-column:1; grid-row:1; }
+      .queue-actions { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }.queue-actions .btn { min-height:34px; font-size:10.5px; }
+      #btnRun { grid-column:1/-1; }#btnPauseQueue { grid-column:1/-1; }
+      .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnRun { grid-column:1; }
+      .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnPauseQueue { grid-column:2; }
       .direct-link summary { min-height:24px; display:flex; align-items:center; gap:6px; font-size:11px; }.direct-link summary::before { content:'+'; }.direct-link[open] summary::before { content:'−'; }
       .platform-icon { width:30px; height:30px; }.switch-card { min-height:44px; }.ig-status-pill { font-size:10px; max-width:125px; }.platform-controls { gap:12px; }
       .advanced[open] { top:54px; right:12px; width:calc(100vw - 24px); max-height:calc(100dvh - 114px); }
@@ -357,6 +374,7 @@
           <div class="queue-actions">
             <button id="btnPauseQueue" class="btn" hidden>Tạm dừng</button>
             <button id="btnRunNext" class="btn" type="button" title="Chạy ngay link tiếp theo trong Google Sheets mà không cần chờ">Chạy link tiếp</button>
+            <button id="btnRestartQueue" class="btn" type="button" title="Đặt lại vị trí về dòng 1 và chạy ngay từ link đầu tiên">Chạy lại từ link 1</button>
             <button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button>
           </div>
         </div>
@@ -968,13 +986,24 @@
           ? `Khoảng cách giữa hai lượt: ${data.intervalSeconds} giây`
           : `Khoảng cách giữa hai lượt: ${Math.round(data.intervalSeconds / 60)} phút`;
       }
-      document.getElementById('queueState').dataset.tone = data.connectionError || data.error ? 'error' : 'normal';
+      const qs = document.getElementById('queueState');
+      if (qs) {
+        qs.dataset.tone = data.connectionError || data.error ? 'error' : 'normal';
+        qs.dataset.state = data.running ? 'running' : (data.enabled ? 'waiting' : 'paused');
+      }
       document.getElementById('btnPauseQueue').hidden = !sheetEnabled || threadsOnlyMode;
+      btnRun.hidden = (sheetEnabled && !urlInput.value.trim()) || threadsOnlyMode;
       const btnRunNext = document.getElementById('btnRunNext');
       if (btnRunNext) {
         btnRunNext.hidden = threadsOnlyMode;
         btnRunNext.disabled = sheetRunning;
-        btnRunNext.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy link tiếp theo';
+        btnRunNext.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy link tiếp';
+      }
+      const btnRestartQueue = document.getElementById('btnRestartQueue');
+      if (btnRestartQueue) {
+        btnRestartQueue.hidden = threadsOnlyMode;
+        btnRestartQueue.disabled = sheetRunning;
+        btnRestartQueue.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy lại link 1';
       }
       moodTextContainer.style.display = chkAddMoodText.checked ? 'block' : 'none';
       updateSwitchUI();
@@ -1205,7 +1234,16 @@
       swCardThreads.classList.toggle('active-ig', chkAutoPostThreads.checked);
       swCardX.classList.toggle('active-ig', chkAutoPostX.checked);
 
-      btnRun.textContent = urlInput.value.trim() ? 'Đăng link này' : (sheetEnabled ? 'Hàng đợi đang bật' : 'Bắt đầu hàng đợi');
+      const hasUrl = Boolean(urlInput.value.trim());
+      if (hasUrl) {
+        btnRun.hidden = false;
+        btnRun.dataset.mode = 'direct';
+        btnRun.textContent = 'Đăng link này';
+      } else {
+        delete btnRun.dataset.mode;
+        btnRun.textContent = sheetEnabled ? 'Hàng đợi đang bật' : 'Bắt đầu hàng đợi';
+        btnRun.hidden = sheetEnabled && !threadsOnlyMode;
+      }
     }
 
     // Handle Facebook & Instagram switch dependency
@@ -1365,6 +1403,30 @@
         button.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy link tiếp theo';
       }
     });
+
+    const btnRestartQueue = document.getElementById('btnRestartQueue');
+    if (btnRestartQueue) {
+      btnRestartQueue.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        if (threadsOnlyMode) return;
+        button.disabled = true;
+        button.textContent = 'Đang đặt lại…';
+        try {
+          const response = await fetch('/api/sheet-queue', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restartFromFirst: true, options: sheetOptions() })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Không thể chạy lại từ link 1');
+          renderSheetQueue(data);
+          showStatus('Đang đặt lại về dòng 1 và quét link từ đầu...', 'loading');
+        } catch (error) { showStatus(error.message, 'error'); }
+        finally {
+          button.disabled = sheetRunning;
+          button.textContent = sheetRunning ? 'Đang xử lý…' : 'Chạy lại từ link 1';
+        }
+      });
+    }
 
     // 1-Click Run Pipeline
     btnRun.addEventListener('click', handleRun);

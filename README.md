@@ -3,25 +3,32 @@
 ## Cấu trúc dự án
 
 ```text
-server.js             Điểm khởi động tương thích với lệnh/shortcut hiện có
-src/
-  server.js           HTTP API và quy trình xử lý bài
-  paths.js            Đường dẫn gốc dùng chung, không phụ thuộc thư mục terminal
-  content/            Caption, hashtag và nội dung AI
-  kuaishou/           Đọc dữ liệu bài Kuaishou
-  media/              Tải, xử lý, dựng video và cache
-  network/            HTTP có timeout và thử lại
-  platforms/          Đăng bài: instagram/, tiktok/, threads/, x/
-  queue/              Google Sheets và hàng đợi
-scripts/              CLI tải media, đăng nhập, render mẫu và kiểm tra giao diện
-config/               Cấu hình mẫu
-public/               Giao diện web
-tests/                Kiểm thử tự động
-downloads/            Media tải về (không đưa lên Git)
-artifacts/            Kết quả kiểm tra (không đưa lên Git)
+├── server.js             # Điểm khởi động tương thích với lệnh/shortcut hiện có
+├── src/
+│   ├── server.js         # HTTP API backend và quy trình xử lý bài
+│   ├── paths.js          # Đường dẫn gốc dùng chung, không phụ thuộc thư mục terminal
+│   ├── content/          # Xử lý caption, hashtag, font chữ an toàn và AI Gemini story
+│   ├── kuaishou/         # Parser bóc tách dữ liệu video/ảnh Kuaishou (no watermark)
+│   ├── media/            # Tải media, bộ lọc chống bản quyền (pitch shift), ffmpeg slideshow
+│   ├── network/          # Quản lý request HTTP có timeout, retry và CDN fallback
+│   ├── platforms/        # Adapter đăng bài: instagram/, tiktok/, threads/, x/
+│   └── queue/            # Quản lý hàng đợi Google Sheets và worker pipeline
+├── scripts/              # Chứa toàn bộ scripts CLI, automation và launchers
+│   ├── start-ui.bat          # Click chạy nhanh Web UI (Windows)
+│   ├── login-*.bat           # Script đăng nhập tài khoản (TikTok, Instagram, Threads)
+│   ├── launch-9router.ps1    # Khởi chạy proxy router
+│   ├── open-kuaishou.ps1     # Script tự động mở giao diện
+│   ├── install.sh            # Script cài đặt tự động (hỗ trợ Linux/Termux/Ubuntu)
+│   └── download.mjs / verify-* CLI tải media & test giao diện
+├── config/               # Thư mục cấu hình mẫu (settings.example.json, slideshow config)
+├── public/               # Mã nguồn giao diện Web Studio UI (HTML/CSS/JS frontend)
+├── tests/                # Bộ kiểm thử tự động toàn diện (Node.js test runner)
+├── downloads/            # Thư mục lưu media tải về (đã gitignore)
+├── logs/                 # Thư mục lưu trữ log hệ thống (đã gitignore)
+└── artifacts/            # Kết quả dựng mẫu và ảnh debug/screenshot lỗi (đã gitignore)
 ```
 
-Các lệnh `npm run ui`, `npm start`, `npm test` và shortcut `open-kuaishou.ps1` vẫn là điểm vào chính. Cấu hình đang dùng (`.setting`, `tiktok-slideshow.config.json`), khóa Google, phiên đăng nhập và trạng thái hàng đợi nằm ở thư mục gốc để tiếp tục dùng dữ liệu hiện có. Không đặt dữ liệu chạy trong `src/`.
+Các lệnh `pnpm ui` (hoặc `npm run ui`), `pnpm start`, `pnpm test` và shortcut `scripts/open-kuaishou.ps1` là điểm vào chính. Cấu hình đang dùng (`.setting`, `tiktok-slideshow.config.json`), khóa Google, phiên đăng nhập và trạng thái hàng đợi nằm ở thư mục gốc để tiếp tục dùng dữ liệu hiện có. Không đặt dữ liệu chạy trong `src/`.
 
 ## Đăng lên X (Twitter)
 
@@ -100,13 +107,19 @@ Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (Q
 
 ## Cách sử dụng
 
-Trước khi chạy, cài dependencies bằng `npm install`, sao chép `config/settings.example.json` thành `.setting`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `google-service-account.json`. Các tệp `.setting`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
+Trước khi chạy, cài dependencies bằng **pnpm** (hoặc npm):
+```bash
+pnpm install
+# hoặc: npm install
+```
+
+Sao chép `config/settings.example.json` thành `.setting`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `google-service-account.json`. Các tệp `.setting`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
 
 ### 1. Sử dụng Giao diện Web (UI Trực Quan - Khuyên dùng)
 Chạy lệnh:
 ```bash
-npm run ui
-# hoặc: node server.js
+pnpm ui
+# hoặc: node server.js (hoặc nhấp đúp scripts/start-ui.bat)
 ```
 - Trình duyệt sẽ tự động mở địa chỉ: `http://localhost:3000`
 - Giao diện có sẵn ô nhập link -> bấm "Bấm Chạy".

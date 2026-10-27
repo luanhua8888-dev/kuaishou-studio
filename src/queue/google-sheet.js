@@ -5,6 +5,17 @@ import { createSign } from 'node:crypto';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+export function colToLetter(colIndex) {
+  let temp = colIndex;
+  let letter = '';
+  while (temp > 0) {
+    const mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - mod) / 26);
+  }
+  return letter;
+}
+
 export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
   let token = null, expiresAt = 0;
   async function accessToken(settings) {
@@ -62,15 +73,25 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
     },
     async readRows(settings) {
       const title = await sheetTitle(settings);
-      const range = `'${title.replace(/'/g, "''")}'!A:C`;
+      const range = `'${title.replace(/'/g, "''")}'!A:Z`;
       const data = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(range)}`);
-      return (data.values || []).map((row, index) => ({
-        row: index + 1,
-        colA: String(row[0] || '').trim(),
-        colB: String(row[1] || '').trim(),
-        colC: row[2] === true || String(row[2] || '').trim().toUpperCase() === 'TRUE' || row[2] === '✓',
-        colD: row[3] === true || String(row[3] || '').trim().toUpperCase() === 'TRUE' || row[3] === '✓'
-      }));
+      return (data.values || []).map((row, index) => {
+        let colB = '';
+        let colC = false;
+        for (let c = 1; c < row.length; c += 2) {
+          const valLink = String(row[c] || '').trim();
+          const valCheck = row[c + 1] === true || String(row[c + 1] || '').trim().toUpperCase() === 'TRUE' || row[c + 1] === '✓';
+          if (valLink) colB = valLink;
+          if (valCheck) colC = true;
+        }
+        return {
+          row: index + 1,
+          colA: String(row[0] || '').trim(),
+          colB,
+          colC,
+          colD: row[3] === true || String(row[3] || '').trim().toUpperCase() === 'TRUE' || row[3] === '✓'
+        };
+      });
     },
     async clearCell(settings, row) {
       const title = await sheetTitle(settings);
@@ -82,9 +103,25 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
       const safeTitle = `'${title.replace(/'/g, "''")}'`;
       const rangeA = `${safeTitle}!A${row}`;
       await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeA)}:clear`, 'POST');
-      const rangeBC = `${safeTitle}!B${row}:C${row}`;
-      await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeBC)}?valueInputOption=USER_ENTERED`, 'PUT', {
-        range: rangeBC,
+
+      // Check current row values from column B onwards to find the first empty pair of columns (B&C, D&E, F&G...)
+      const rangeRow = `${safeTitle}!B${row}:ZZ${row}`;
+      const rowData = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeRow)}`);
+      const rowValues = rowData.values?.[0] || [];
+
+      let colIndex = 2; // Column B is 2
+      while (true) {
+        const val1 = String(rowValues[colIndex - 2] || '').trim();
+        const val2 = String(rowValues[colIndex - 1] || '').trim();
+        if (!val1 && !val2) break;
+        colIndex += 2;
+      }
+
+      const colStart = colToLetter(colIndex);
+      const colEnd = colToLetter(colIndex + 1);
+      const targetRange = `${safeTitle}!${colStart}${row}:${colEnd}${row}`;
+      await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`, 'PUT', {
+        range: targetRange,
         values: [[link, true]]
       });
     }

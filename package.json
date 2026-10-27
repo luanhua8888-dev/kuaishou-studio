@@ -1,6 +1,7 @@
 {
   "name": "kuaishou-downloader",
   "version": "1.0.0",
+  "packageManager": "pnpm@12.15.0",
   "type": "module",
   "scripts": {
     "start": "node scripts/download.mjs",
