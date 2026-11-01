@@ -1,4 +1,4 @@
-import { PROJECT_ROOT } from '../../paths.js';
+import { AUTH_DIR, SCREENSHOTS_DIR } from '../../paths.js';
 import { chromium } from 'playwright';
 import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './upload.js';
 import { removeCaptionMentions } from '../../content/caption-text.js';
@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs';
 
 
-export const AUTH_FILE = path.join(PROJECT_ROOT, 'tiktok_auth.json');
+export const AUTH_FILE = path.join(AUTH_DIR, 'tiktok_auth.json');
 
 function getChromiumExecutable() {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -86,6 +86,7 @@ export async function interactiveLogin() {
         if (hasSessionCookie && (isPastLogin || hasProfile)) {
           console.log('[TikTok] Đã phát hiện đăng nhập TikTok thành công!');
           loggedIn = true;
+          fs.mkdirSync(AUTH_DIR, { recursive: true });
           await context.storageState({ path: AUTH_FILE });
           console.log(`[TikTok] Đã lưu phiên đăng nhập TikTok vào: ${AUTH_FILE}`);
           await page.waitForTimeout(3000);
@@ -98,6 +99,7 @@ export async function interactiveLogin() {
     }
 
     if (loggedIn) {
+      fs.mkdirSync(AUTH_DIR, { recursive: true });
       await context.storageState({ path: AUTH_FILE });
     }
 
@@ -265,6 +267,7 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
     }
 
     console.log('[TikTok] Đăng video lên TikTok hoàn tất!');
+    fs.mkdirSync(AUTH_DIR, { recursive: true });
     await context.storageState({ path: AUTH_FILE });
     await browser.close();
 
@@ -272,7 +275,8 @@ export async function postToTikTok({ videoPath, caption, headless = false, onPro
   } catch (err) {
     console.error('[TikTok] Lỗi đăng bài TikTok:', err.message);
     try {
-      await page.screenshot({ path: path.join(PROJECT_ROOT, 'tiktok_error.png'), fullPage: true });
+      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'tiktok_error.png'), fullPage: true });
     } catch {}
     await browser.close();
     throw err;

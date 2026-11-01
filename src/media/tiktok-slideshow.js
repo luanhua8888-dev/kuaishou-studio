@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { PROJECT_ROOT } from '../paths.js';
+import { SLIDESHOW_CONFIG_FILE } from '../paths.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -26,7 +26,7 @@ const number = (value, fallback, min, max, name) => {
 };
 
 export function readTikTokSlideshowConfig(overrides = {}) {
-  const file = path.join(PROJECT_ROOT, 'tiktok-slideshow.config.json');
+  const file = SLIDESHOW_CONFIG_FILE;
   const saved = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   return { ...saved, ...overrides, text: { ...saved.text, ...overrides.text }, audio: { ...saved.audio, ...overrides.audio } };
 }

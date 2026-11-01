@@ -1,4 +1,4 @@
-import { PROJECT_ROOT } from '../../paths.js';
+import { AUTH_DIR, SCREENSHOTS_DIR } from '../../paths.js';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,8 +8,7 @@ import { threadsTopic } from '../../content/threads-caption.js';
 import { sanitizeVideoAudioForCopyright } from '../../media/anti-copyright.js';
 import { confirmThreadsPost } from './confirmation.js';
 
-const root = PROJECT_ROOT;
-export const AUTH_FILE = path.join(root, 'threads_auth.json');
+export const AUTH_FILE = path.join(AUTH_DIR, 'threads_auth.json');
 const CREATE = /^(Create|New thread|Thread mới|Tạo|Bài viết mới)$/i;
 let loginAttempt = null;
 let loginError = null;
@@ -69,6 +68,7 @@ async function waitForLogin(browser, context, page) {
         await page.goto('https://www.threads.com/', { waitUntil: 'domcontentloaded' });
         const create = page.getByRole('button', { name: CREATE }).or(page.getByRole('link', { name: CREATE })).first();
         if (await create.isVisible().catch(() => false)) {
+          fs.mkdirSync(AUTH_DIR, { recursive: true });
           await context.storageState({ path: AUTH_FILE });
           return true;
         }
@@ -148,7 +148,8 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
         if (!composed.includes(tag)) throw new Error(`Mô tả Threads bị mất hashtag ${tag}; chưa đăng bài.`);
       }
       if (prepareOnly) {
-        await page.screenshot({ path: path.join(root, 'artifacts', 'threads-caption-preflight.png') });
+        fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+        await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'threads-caption-preflight.png') });
         return { prepared: true, caption: composed, topicAttached, topic };
       }
       // Keep the browser open while uploads finish, and observe before clicking.
@@ -159,10 +160,12 @@ export async function postToThreads({ imagePaths, caption, headless = false, pre
           await post.evaluate(el => el.click());
         }
       });
+      fs.mkdirSync(AUTH_DIR, { recursive: true });
       await context.storageState({ path: AUTH_FILE });
       return { success: true, topicAttached, topic, message: 'Đã đăng trực tiếp lên Threads.' };
     } catch (error) {
-      await page.screenshot({ path: path.join(root, 'threads_error.png') }).catch(() => {});
+      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'threads_error.png') }).catch(() => {});
       const message = error.message.replace(/\u001b\[[0-9;]*m/g, '');
       throw new Error(message.includes('tránh đăng trùng') ? message
         : `${message}. Kiểm tra tài khoản trước khi thử lại để tránh đăng trùng.`);

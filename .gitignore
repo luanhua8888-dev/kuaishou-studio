@@ -1,4 +1,5 @@
 # Logs & Runtime states
+data/
 logs/
 *.log
 *.tmp
@@ -14,6 +15,9 @@ artifacts/
 *.zip
 
 # Auth & Credentials
+/config/settings.json
+/config/x-client.json
+/config/credentials/
 google-service-account*.json
 *service-account*.json
 loginwithjavascript*.json

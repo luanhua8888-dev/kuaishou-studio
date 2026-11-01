@@ -1,4 +1,4 @@
-import { PROJECT_ROOT } from './paths.js';
+import { PROJECT_ROOT, SETTINGS_FILE, QUEUE_DIR, DOWNLOADS_DIR } from './paths.js';
 import http from 'http';
 import { connectionStatus as xStatus, connectX, postToX, prepareXCaption, createXClient } from './platforms/x/poster.js';
 import { xOAuth } from './platforms/x/oauth.js';
@@ -22,6 +22,7 @@ import { networkRead, mapLimit } from './network/network-read.js';
 import { downloadMediaFile, videoDownloadUrls } from './media/download.js';
 import { renderWithCache } from './media/render-cache.js';
 import { createTikTokSlideshow, readTikTokSlideshowConfig } from './media/tiktok-slideshow.js';
+import { sanitizeVideoAudioForCopyright } from './media/anti-copyright.js';
 
 
 const execPromise = util.promisify(exec);
@@ -37,10 +38,10 @@ const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/
 const pipelineProgress = new Map();
 const pipelineStageStarted = new Map();
 let sheetJobId = null;
-const googleSheet = createGoogleSheet({ settingsPath: path.join(PROJECT_ROOT, '.setting') });
+const googleSheet = createGoogleSheet({ settingsPath: SETTINGS_FILE });
 const sheetQueue = createSheetQueue({
-  statePath: path.join(PROJECT_ROOT, X_ONLY ? 'sheet-queue-x-state.json' : TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
-  settingsPath: path.join(PROJECT_ROOT, '.setting'),
+  statePath: path.join(QUEUE_DIR, X_ONLY ? 'sheet-queue-x-state.json' : TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
+  settingsPath: SETTINGS_FILE,
   sheet: googleSheet,
   async runPipeline(url, options) {
     const jobId = `sheet-${Date.now()}`;
@@ -62,7 +63,7 @@ function setPipelineProgress(jobId, message) {
 }
 
 function removeDownloadDirectory(target) {
-  const root = path.resolve(PROJECT_ROOT, 'downloads');
+  const root = DOWNLOADS_DIR;
   const resolved = path.resolve(target);
   const relative = path.relative(root, resolved);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -809,7 +810,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(PROJECT_ROOT, 'downloads', folderName);
+      const outputDir = path.join(DOWNLOADS_DIR, folderName);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
@@ -938,7 +939,7 @@ const server = http.createServer(async (req, res) => {
   // 7. API: Trigger Interactive Login
   if (req.method === 'POST' && reqUrl.pathname === '/api/ig/login') {
     try {
-      const batPath = path.join(PROJECT_ROOT, 'scripts', 'login-instagram.bat');
+      const batPath = path.join(PROJECT_ROOT, 'scripts', 'windows', 'login-instagram.bat');
       exec(`start "" "${batPath}"`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: true, message: 'Đang mở cửa sổ đăng nhập Instagram' }));
@@ -984,7 +985,7 @@ const server = http.createServer(async (req, res) => {
 
       // Download files locally first to ensure paths
       const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(PROJECT_ROOT, 'downloads', folderName);
+      const outputDir = path.join(DOWNLOADS_DIR, folderName);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
@@ -1078,7 +1079,7 @@ const server = http.createServer(async (req, res) => {
   // 8.2. API: Trigger Interactive TikTok Login
   if (req.method === 'POST' && reqUrl.pathname === '/api/tiktok/login') {
     try {
-      const batPath = path.join(PROJECT_ROOT, 'scripts', 'login-tiktok.bat');
+      const batPath = path.join(PROJECT_ROOT, 'scripts', 'windows', 'login-tiktok.bat');
       exec(`start "" "${batPath}"`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: true, message: 'Đang mở cửa sổ đăng nhập TikTok' }));
@@ -1100,7 +1101,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(PROJECT_ROOT, 'downloads', folderName);
+      const outputDir = path.join(DOWNLOADS_DIR, folderName);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
@@ -1181,22 +1182,23 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && reqUrl.pathname === '/api/sheet-column') {
     try {
-      const settings = readSettings(path.join(PROJECT_ROOT, '.setting'));
+      const settings = readSettings(SETTINGS_FILE);
       let rows;
       if (typeof googleSheet.readRows === 'function') {
         const allRows = await googleSheet.readRows(settings);
         rows = allRows
-          .filter(item => item.colA || item.colB || item.colC)
+          .filter(item => item.colA || item.colB || item.colC || (item.links && Object.keys(item.links).length > 0))
           .map(item => ({
             row: item.row,
             value: item.colA,
             colA: item.colA,
             colB: item.colB,
-            colC: item.colC
+            colC: item.colC,
+            links: item.links || (item.colB ? { B: item.colB } : {})
           }));
       } else {
         const cells = await googleSheet.readColumn(settings);
-        rows = cells.map((value, index) => ({ row: index + 1, value: String(value), colA: String(value), colB: '', colC: false })).filter(item => item.value.trim());
+        rows = cells.map((value, index) => ({ row: index + 1, value: String(value), colA: String(value), colB: '', colC: false, links: {} })).filter(item => item.value.trim());
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ rows }));
@@ -1208,7 +1210,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqUrl.pathname === '/api/ai-settings') {
-    const settingPath = path.join(PROJECT_ROOT, '.setting');
+    const settingPath = SETTINGS_FILE;
     if (req.method === 'GET') {
       let geminiApiKey = '';
       try {
@@ -1229,6 +1231,7 @@ const server = http.createServer(async (req, res) => {
           try { settings = JSON.parse(fs.readFileSync(settingPath, 'utf8')); } catch {}
         }
         settings.geminiApiKey = String(body.geminiApiKey || '').trim();
+        fs.mkdirSync(path.dirname(settingPath), { recursive: true });
         fs.writeFileSync(settingPath, JSON.stringify(settings, null, 2), 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: true, hasKey: Boolean(settings.geminiApiKey) }));
@@ -1327,7 +1330,7 @@ const server = http.createServer(async (req, res) => {
       // Step 2: Download media locally
       setPipelineProgress(jobId, 'Đang tải ảnh và nhạc…');
       const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(PROJECT_ROOT, 'downloads', folderName);
+      const outputDir = path.join(DOWNLOADS_DIR, folderName);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
@@ -1352,6 +1355,17 @@ const server = http.createServer(async (req, res) => {
         });
         uploadPaths = [videoPath];
         targetVideo = videoPath;
+
+        try {
+          setPipelineProgress(jobId, 'Đang tối ưu âm thanh bản quyền cho video…');
+          const safeVideoPath = await sanitizeVideoAudioForCopyright(videoPath);
+          if (safeVideoPath && fs.existsSync(safeVideoPath) && fs.statSync(safeVideoPath).size > 0) {
+            uploadPaths = [safeVideoPath];
+            targetVideo = safeVideoPath;
+          }
+        } catch (sanitizeErr) {
+          console.warn('[Server] Không thể xử lý lách bản quyền video, sử dụng file gốc:', sanitizeErr.message);
+        }
 
         if (post.coverUrl) {
           await downloadImageAsJpg(post.coverUrl, path.join(outputDir, 'cover.jpg')).catch(() => {});
@@ -1385,7 +1399,12 @@ const server = http.createServer(async (req, res) => {
                 setPipelineProgress(jobId, 'Đang ghép Reel cho Instagram và Facebook…');
                 console.log('[Instagram] Đang tạo video Reel 9:16 sạch chữ cho Instagram/Facebook...');
                 await createCinematicReel(localImagePaths, validAudio, reelPath, '', frameCacheDir);
-                uploadPaths = [reelPath];
+                try {
+                  const safeReelPath = await sanitizeVideoAudioForCopyright(reelPath);
+                  uploadPaths = [safeReelPath];
+                } catch {
+                  uploadPaths = [reelPath];
+                }
               } catch (e) {
                 console.error('Không thể tạo Reel Instagram:', e.message);
               }
@@ -1407,7 +1426,12 @@ const server = http.createServer(async (req, res) => {
                 };
                 if (!enableMoodQuote) config.sceneTexts = [];
                 await createTikTokSlideshow(localImagePaths, validAudio, tiktokReelPath, config);
-                targetVideo = tiktokReelPath;
+                try {
+                  const safeTikTokReelPath = await sanitizeVideoAudioForCopyright(tiktokReelPath);
+                  targetVideo = safeTikTokReelPath;
+                } catch {
+                  targetVideo = tiktokReelPath;
+                }
               } catch (e) {
                 console.error('Không thể tạo Video TikTok:', e.message);
                 throw e;
@@ -1417,6 +1441,13 @@ const server = http.createServer(async (req, res) => {
         } finally {
           if (fs.existsSync(frameCacheDir)) removeDownloadDirectory(frameCacheDir);
         }
+      }
+
+      if (autoPostTikTok && (!targetVideo || !fs.existsSync(targetVideo) || fs.statSync(targetVideo).size === 0)) {
+        throw new Error('Chưa có video sẵn sàng để đăng lên TikTok');
+      }
+      if ((autoPostIG || autoPostFB || autoPostThreads || autoPostX) && (!uploadPaths || uploadPaths.length === 0)) {
+        throw new Error('Chưa có hình ảnh hoặc video để đăng bài');
       }
 
       publishingStarted = true;

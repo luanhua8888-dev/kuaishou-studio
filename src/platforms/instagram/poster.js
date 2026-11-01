@@ -1,4 +1,4 @@
-import { PROJECT_ROOT } from '../../paths.js';
+import { AUTH_DIR, SCREENSHOTS_DIR } from '../../paths.js';
 import { chromium } from 'playwright';
 import { openInstagramUpload } from './upload.js';
 import { confirmInstagramPost } from './confirmation.js';
@@ -10,7 +10,7 @@ import fs from 'fs';
 import { exec } from 'child_process';
 
 
-export const AUTH_FILE = path.join(PROJECT_ROOT, 'ig_auth.json');
+export const AUTH_FILE = path.join(AUTH_DIR, 'ig_auth.json');
 
 function getChromiumExecutable() {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -93,6 +93,7 @@ export async function interactiveLogin() {
           console.log('[Instagram] Đã phát hiện đăng nhập thành công!');
           loggedIn = true;
           // Save storage state (cookies + tokens)
+          fs.mkdirSync(AUTH_DIR, { recursive: true });
           await context.storageState({ path: AUTH_FILE });
           console.log(`[Instagram] Đã lưu phiên đăng nhập vào: ${AUTH_FILE}`);
           await page.waitForTimeout(3000);
@@ -106,6 +107,7 @@ export async function interactiveLogin() {
     }
 
     if (loggedIn) {
+      fs.mkdirSync(AUTH_DIR, { recursive: true });
       await context.storageState({ path: AUTH_FILE });
     }
 
@@ -486,7 +488,8 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
     await shareBtn.waitFor({ state: 'visible', timeout: 10000 });
 
     if (prepareOnly) {
-      await page.screenshot({ path: path.join(PROJECT_ROOT, 'ig_preflight.png') });
+      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'ig_preflight.png') });
       await browser.close();
       return { success: false, prepared: true, facebookShared };
     }
@@ -497,6 +500,7 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
 
     console.log('[Instagram] Đăng bài lên Instagram thành công!');
     // Update cookies
+    fs.mkdirSync(AUTH_DIR, { recursive: true });
     await context.storageState({ path: AUTH_FILE });
     await page.waitForTimeout(3000);
     await browser.close();
@@ -504,7 +508,8 @@ export async function postToInstagram({ imagePaths, caption, headless = false, s
   } catch (err) {
     console.error('[Instagram] Lỗi đăng bài:', err.message);
     try {
-      await page.screenshot({ path: path.join(PROJECT_ROOT, 'ig_error.png') });
+      fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'ig_error.png') });
     } catch {}
     await browser.close();
     throw err;

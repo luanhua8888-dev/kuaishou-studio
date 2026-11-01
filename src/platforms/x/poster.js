@@ -1,12 +1,11 @@
-import { PROJECT_ROOT } from '../../paths.js';
+import { AUTH_DIR } from '../../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import twitterText from 'twitter-text';
 import { removeCaptionMentions } from '../../content/caption-text.js';
 import { xOAuth } from './oauth.js';
 
-const root = PROJECT_ROOT;
-export const AUTH_FILE = path.join(root, 'x_auth.json');
+export const AUTH_FILE = path.join(AUTH_DIR, 'x_auth.json');
 const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4' };
 
 export function prepareXCaption(value, { truncate = false } = {}) {
@@ -124,6 +123,7 @@ export function createXClient({ accessToken, fetchImpl = fetch, sleep = ms => ne
 
 export async function connectX(accessToken) {
   const user = await createXClient({ accessToken }).verify();
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
   fs.writeFileSync(AUTH_FILE, JSON.stringify({ accessToken, username: user.username, userId: user.id }), { mode: 0o600 });
   return { success: true, loggedIn: true, username: user.username };
 }

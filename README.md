@@ -3,52 +3,67 @@
 ## Cấu trúc dự án
 
 ```text
-├── server.js             # Điểm khởi động tương thích với lệnh/shortcut hiện có
-├── src/
-│   ├── server.js         # HTTP API backend và quy trình xử lý bài
-│   ├── paths.js          # Đường dẫn gốc dùng chung, không phụ thuộc thư mục terminal
-│   ├── content/          # Xử lý caption, hashtag, font chữ an toàn và AI Gemini story
-│   ├── kuaishou/         # Parser bóc tách dữ liệu video/ảnh Kuaishou (no watermark)
-│   ├── media/            # Tải media, bộ lọc chống bản quyền (pitch shift), ffmpeg slideshow
-│   ├── network/          # Quản lý request HTTP có timeout, retry và CDN fallback
-│   ├── platforms/        # Adapter đăng bài: instagram/, tiktok/, threads/, x/
-│   └── queue/            # Quản lý hàng đợi Google Sheets và worker pipeline
-├── scripts/              # Chứa toàn bộ scripts CLI, automation và launchers
-│   ├── start-ui.bat          # Click chạy nhanh Web UI (Windows)
-│   ├── login-*.bat           # Script đăng nhập tài khoản (TikTok, Instagram, Threads)
-│   ├── launch-9router.ps1    # Khởi chạy proxy router
-│   ├── open-kuaishou.ps1     # Script tự động mở giao diện
-│   ├── install.sh            # Script cài đặt tự động (hỗ trợ Linux/Termux/Ubuntu)
-│   └── download.mjs / verify-* CLI tải media & test giao diện
-├── config/               # Thư mục cấu hình mẫu (settings.example.json, slideshow config)
-├── public/               # Mã nguồn giao diện Web Studio UI (HTML/CSS/JS frontend)
-├── tests/                # Bộ kiểm thử tự động toàn diện (Node.js test runner)
-├── downloads/            # Thư mục lưu media tải về (đã gitignore)
-├── logs/                 # Thư mục lưu trữ log hệ thống (đã gitignore)
-└── artifacts/            # Kết quả dựng mẫu và ảnh debug/screenshot lỗi (đã gitignore)
+├── src/                  # Mã nguồn backend
+│   ├── server.js         # HTTP API và quy trình xử lý bài
+│   ├── paths.js          # Đường dẫn dùng chung, độc lập với thư mục terminal
+│   ├── content/          # Caption, hashtag và câu chuyện AI
+│   ├── kuaishou/         # Đọc dữ liệu bài Kuaishou
+│   ├── media/            # Tải và xử lý ảnh, âm thanh, video
+│   ├── network/          # HTTP, timeout và retry
+│   ├── platforms/        # instagram/, tiktok/, threads/, x/
+│   └── queue/            # Google Sheets và hàng đợi
+├── public/               # Giao diện web
+├── config/               # Cấu hình ứng dụng
+│   ├── examples/         # Mẫu cấu hình để sao chép
+│   ├── credentials/      # Khóa Google, chỉ lưu trên máy
+│   ├── settings.json     # Cấu hình cá nhân, chỉ lưu trên máy
+│   ├── x-client.json     # Client ID của X, chỉ lưu trên máy
+│   └── tiktok-slideshow.config.json
+├── data/                 # Dữ liệu chạy, toàn bộ được Git bỏ qua
+│   ├── auth/             # Phiên đăng nhập các nền tảng
+│   ├── queue/            # Trạng thái hàng đợi từng phiên
+│   ├── logs/             # Log hệ thống
+│   └── artifacts/        # Video mẫu, báo cáo và screenshots/
+├── downloads/            # Video, ảnh và nhạc tải về
+├── scripts/
+│   ├── cli/              # Tải media, dựng video mẫu
+│   ├── checks/           # Kiểm tra API và giao diện
+│   ├── setup/            # Cài đặt Linux/Termux
+│   ├── windows/          # Chạy UI, đăng nhập, mở 9router
+│   └── open-kuaishou.ps1 # Giữ tương thích với shortcut cũ
+├── tests/                # Chia theo nhóm tương ứng với src/
+│   ├── content/, kuaishou/, media/, network/, queue/
+│   ├── platforms/        # Test riêng từng nền tảng
+│   └── integration/      # Khởi động server và kiểm tra đường dẫn
+├── server.js             # Điểm khởi động ứng dụng
+└── open-kuaishou.ps1     # Shortcut mở UI
 ```
 
-Các lệnh `pnpm ui` (hoặc `npm run ui`), `pnpm start`, `pnpm test` và shortcut `scripts/open-kuaishou.ps1` là điểm vào chính. Cấu hình đang dùng (`.setting`, `tiktok-slideshow.config.json`), khóa Google, phiên đăng nhập và trạng thái hàng đợi nằm ở thư mục gốc để tiếp tục dùng dữ liệu hiện có. Không đặt dữ liệu chạy trong `src/`.
+Các lệnh `pnpm ui` (hoặc `npm run ui`), `pnpm start`, `pnpm test` và shortcut `open-kuaishou.ps1` vẫn dùng như cũ. Chạy nhanh trên Windows bằng `scripts/windows/start-ui.bat`. `npm test` tự tìm test trong các thư mục con.
+
+Cần sửa cấu hình: mở `config/`. Cần tìm media đã tải: mở `downloads/`. Cần xem log hoặc ảnh lỗi: mở `data/logs/` hoặc `data/artifacts/screenshots/`. File cấu hình cá nhân, khóa Google và dữ liệu trong `data/` không được đưa lên Git.
+
+Đường dẫn `serviceAccountKeyFile` được tính từ thư mục chứa `config/settings.json`; ví dụ `credentials/google-service-account.json`. Khi chuyển từ cấu trúc cũ, chuyển `.setting` thành `config/settings.json`, `.x-client.json` thành `config/x-client.json`, các file `*_auth.json` vào `data/auth/` và `sheet-queue*.json` vào `data/queue/`. Giữ nguyên nội dung phiên đăng nhập và hàng đợi; cập nhật `serviceAccountKeyFile` theo vị trí khóa mới.
 
 ## Đăng lên X (Twitter)
 
 X có công tắc riêng trong giao diện chính (`npm run ui`), nút **Đăng riêng lên X** trong kết quả và hỗ trợ hàng đợi Google Sheets. Công tắc X mặc định tắt để không tự thêm một đích đăng vào hàng đợi cũ.
 
-Chạy phiên X riêng bằng `npm run ui:x`, mở `http://localhost:3004`. Phiên này chỉ đăng X, lưu hàng đợi riêng trong `sheet-queue-x-state.json`. Nếu hai phiên cùng dùng một Google Sheet, chỉ bật hàng đợi ở một phiên tại một thời điểm vì chúng cùng xử lý và xóa các ô nguồn.
+Chạy phiên X riêng bằng `npm run ui:x`, mở `http://localhost:3004`. Phiên này chỉ đăng X, lưu hàng đợi riêng trong `data/queue/sheet-queue-x-state.json`. Nếu hai phiên cùng dùng một Google Sheet, chỉ bật hàng đợi ở một phiên tại một thời điểm vì chúng cùng xử lý và xóa các ô nguồn.
 
-Để kết nối tự động, cấu hình ứng dụng **Native App** trên [X Developer Console](https://developer.x.com/), lưu callback `http://127.0.0.1:3000/api/x/callback`, rồi đặt Client ID OAuth 2.0 vào `.x-client.json` theo mẫu `{ "clientId": "CLIENT_ID_CUA_BAN" }` (hoặc biến môi trường `X_CLIENT_ID`). Khởi động lại server, bấm trạng thái X → **Đăng nhập X**, đăng nhập và xác nhận quyền trên trang X. Callback phải khớp chính xác cổng đang dùng; phiên cổng 3004 cần callback `http://127.0.0.1:3004/api/x/callback` riêng.
+Để kết nối tự động, cấu hình ứng dụng **Native App** trên [X Developer Console](https://developer.x.com/), lưu callback `http://127.0.0.1:3000/api/x/callback`, rồi đặt Client ID OAuth 2.0 vào `config/x-client.json` theo mẫu `{ "clientId": "CLIENT_ID_CUA_BAN" }` (hoặc biến môi trường `X_CLIENT_ID`). Khởi động lại server, bấm trạng thái X → **Đăng nhập X**, đăng nhập và xác nhận quyền trên trang X. Callback phải khớp chính xác cổng đang dùng; phiên cổng 3004 cần callback `http://127.0.0.1:3004/api/x/callback` riêng.
 
 Ứng dụng dùng [OAuth 2.0 PKCE chính thức](https://docs.x.com/fundamentals/authentication/oauth-2-0/user-access-token), yêu cầu `tweet.read`, `tweet.write`, `users.read`, `media.write`, `offline.access`. Code xác thực được đổi lấy token tại server, kiểm tra tài khoản rồi lưu trên máy. Token được tự làm mới trước khi đăng khi gần hết hạn. Không cần Client Secret cho Native App. Quyền truy cập và tín dụng API được quản lý trong tài khoản Developer của bạn.
 
 Bạn vẫn có thể mở **Nhập token có sẵn** để nhập OAuth 2.0 User Access Token thủ công. Token nhập tay không được tự làm mới; App-only Bearer Token không dùng để đăng bài.
 
-Token được xác minh bằng API tài khoản trước khi lưu vào `x_auth.json` trên máy; file này và `.x-client.json` được Git bỏ qua. Trạng thái **Đã lưu kết nối** phản ánh token đã lưu, không kiểm tra lại token qua API mỗi 5 giây. Nếu X thu hồi quyền hoặc token không thể làm mới, đăng nhập lại.
+Token được xác minh bằng API tài khoản trước khi lưu vào `data/auth/x_auth.json` trên máy; file này và `config/x-client.json` được Git bỏ qua. Trạng thái **Đã lưu kết nối** phản ánh token đã lưu, không kiểm tra lại token qua API mỗi 5 giây. Nếu X thu hồi quyền hoặc token không thể làm mới, đăng nhập lại.
 
 X nhận một video MP4 hoặc tối đa 4 ảnh JPG/PNG/WebP (mỗi ảnh tối đa 5 MB). Bật dựng Reel để chuyển bộ ảnh nhiều hơn 4 ảnh thành video; công cụ báo lỗi nếu vẫn phải gửi quá nhiều ảnh, không bỏ bớt ảnh âm thầm. Caption được kiểm tra theo cách đếm ký tự của X, gồm Unicode và URL. Caption tự sinh dài được rút gọn riêng cho X; caption tự nhập quá dài được báo lỗi để bạn sửa.
 
 Đăng media sử dụng [API upload v2 chính thức](https://docs.x.com/x-api/media/quickstart/media-upload-chunked), chờ xử lý rồi gọi API tạo bài đúng một lần. Chỉ báo thành công khi nhận mã bài đăng. Nếu X lỗi, hàng đợi giữ link và các kết quả đã đăng ở nền tảng khác. Hãy kiểm tra tài khoản nếu phản hồi đăng không rõ ràng trước khi thử lại. Bài đã xác nhận đăng thành công trên X được bỏ qua khi chạy lại cùng dòng.
 
-Kiểm thử bằng `npm test`. Sau khi mở phiên X ở cổng 3004, chạy `node scripts/verify-x-ui.mjs` để kiểm tra giao diện và chụp ảnh desktop/mobile trong `artifacts/`; lệnh này không đăng bài thật.
+Kiểm thử bằng `npm test`. Sau khi mở phiên X ở cổng 3004, chạy `node scripts/checks/verify-x-ui.mjs` để kiểm tra giao diện và chụp ảnh desktop/mobile trong `data/artifacts/`; lệnh này không đăng bài thật.
 
 ## Slideshow phong cảnh — đăng riêng TikTok
 
@@ -56,7 +71,7 @@ Chạy `npm run ui:tiktok`, mở `http://localhost:3003`. Phiên này chỉ cho 
 
 Bộ dựng TikTok dùng Node.js + FFmpeg hiện có: H.264 1080×1920, SAR 1:1, 30 fps; mặc định 14 giây, khoảng 6 ảnh khi đủ nguồn, dissolve 0,3 giây. Ảnh chính được fit trọn vẹn lên nền mờ; zoom 3,5% nằm trong khoảng đệm, giữ chủ thể ở mép ảnh. Chữ được chèn sau chuyển cảnh để không bị zoom hay chồng hai câu. TikTok không còn đi qua bước đổi cao độ âm thanh.
 
-Chỉnh `tiktok-slideshow.config.json` rồi chạy lượt mới (không cần khởi động lại để đọc cấu hình dựng):
+Chỉnh `config/tiktok-slideshow.config.json` rồi chạy lượt mới (không cần khởi động lại để đọc cấu hình dựng):
 
 | Thuộc tính | Cách dùng |
 | --- | --- |
@@ -75,13 +90,13 @@ Chỉnh `tiktok-slideshow.config.json` rồi chạy lượt mới (không cần 
 
 API `/api/tiktok/post` và `/api/run-pipeline` nhận thêm `slideshowConfig` để ghi đè cấu hình cho từng lượt. Trên giao diện, nhập mỗi dòng một câu cho link chạy thủ công/đăng lại TikTok; để trống dùng cấu hình mặc định. Hàng đợi đọc câu chuyện từ file cấu hình. Công tắc chèn chữ tắt sẽ xuất không chữ; câu tâm trạng đơn cũ không còn lặp trên slideshow TikTok. Phần dựng Instagram/Facebook vẫn dùng bộ dựng riêng trước đó.
 
-Ví dụ bốn câu và caption bạn cung cấp nằm trong `config/tiktok-slideshow.norway.example.json`. Đây là mẫu cấu hình; chỉ dùng tên Na Uy khi ảnh thực tế đúng địa điểm. Render kiểm tra bằng `npm run render:tiktok` hoặc:
+Ví dụ bốn câu và caption bạn cung cấp nằm trong `config/examples/tiktok-slideshow.norway.example.json`. Đây là mẫu cấu hình; chỉ dùng tên Na Uy khi ảnh thực tế đúng địa điểm. Render kiểm tra bằng `npm run render:tiktok` hoặc:
 
 ```powershell
-node scripts/render-tiktok-sample.mjs "downloads/thu-muc-anh" "config/tiktok-slideshow.norway.example.json" "artifacts/tiktok-landscape-sample.mp4"
+node scripts/cli/render-tiktok-sample.mjs "downloads/thu-muc-anh" "config/examples/tiktok-slideshow.norway.example.json" "data/artifacts/tiktok-landscape-sample.mp4"
 ```
 
-Lệnh render không đăng bài. Video mẫu và caption nằm trong `artifacts/`; khung đầu/giữa/cuối và mọi điểm chuyển cảnh nằm trong `artifacts/slideshow-qa/`. Bộ dựng lưu `.story.json` để đối chiếu thứ tự ảnh, thời gian và chữ. Thay cấu hình/ảnh/font làm cache mất hiệu lực. Các thay đổi nhằm cải thiện khả năng đọc và trải nghiệm xem, không bảo đảm lượt xem hoặc khắc phục hạn chế phân phối.
+Lệnh render không đăng bài. Video mẫu và caption nằm trong `data/artifacts/`; khung đầu/giữa/cuối và mọi điểm chuyển cảnh nằm trong `data/artifacts/slideshow-qa/`. Bộ dựng lưu `.story.json` để đối chiếu thứ tự ảnh, thời gian và chữ. Thay cấu hình/ảnh/font làm cache mất hiệu lực. Các thay đổi nhằm cải thiện khả năng đọc và trải nghiệm xem, không bảo đảm lượt xem hoặc khắc phục hạn chế phân phối.
 
 Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (QuickWorker / 快手), hoàn toàn không dính logo watermark, tự động đăng lên Instagram, TikTok, Facebook.
 
@@ -113,13 +128,13 @@ pnpm install
 # hoặc: npm install
 ```
 
-Sao chép `config/settings.example.json` thành `.setting`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `google-service-account.json`. Các tệp `.setting`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
+Sao chép `config/examples/settings.example.json` thành `config/settings.json`, rồi điền `sheetId` và đặt khóa service account Google vào tệp `config/credentials/google-service-account.json`. Các tệp `config/settings.json`, khóa Google và phiên đăng nhập mạng xã hội chỉ lưu trên máy, không đưa lên GitHub.
 
 ### 1. Sử dụng Giao diện Web (UI Trực Quan - Khuyên dùng)
 Chạy lệnh:
 ```bash
 pnpm ui
-# hoặc: node server.js (hoặc nhấp đúp scripts/start-ui.bat)
+# hoặc: node server.js (hoặc nhấp đúp scripts/windows/start-ui.bat)
 ```
 - Trình duyệt sẽ tự động mở địa chỉ: `http://localhost:3000`
 - Giao diện có sẵn ô nhập link -> bấm "Bấm Chạy".
@@ -131,7 +146,7 @@ pnpm ui
 ### 2. Sử dụng dòng lệnh Terminal (CLI)
 ```bash
 npm start
-# hoặc: node scripts/download.mjs
+# hoặc: node scripts/cli/download.mjs
 ```
 Tool sẽ hiện nhắc:
 ```text
@@ -144,12 +159,12 @@ Bạn chỉ cần dán link vào và bấm `Enter`, tải xong có thể dán ti
 
 ### 3. Tải nhanh bằng cách truyền link trực tiếp qua dòng lệnh
 ```bash
-node scripts/download.mjs "https://v.kuaishou.com/KzRiYcFY"
+node scripts/cli/download.mjs "https://v.kuaishou.com/KzRiYcFY"
 ```
 
 Bạn cũng có thể tải cùng lúc nhiều link:
 ```bash
-node scripts/download.mjs "link_1" "link_2" "link_3"
+node scripts/cli/download.mjs "link_1" "link_2" "link_3"
 ```
 
 ---
@@ -183,9 +198,9 @@ https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJ
 
 - Dán mỗi link Kuaishou vào một dòng của **cột A**, bắt đầu từ **A1** trên trang tính đầu tiên.
 - Để trống ô nhập link trên giao diện rồi bấm **Bắt đầu**: ứng dụng quét từ A1 và xử lý ngay link đầu tiên tìm thấy. Sau khi xử lý xong, đồng hồ trên giao diện đếm ngược phút và giây tới lượt kế tiếp.
-- Chỉnh `intervalSeconds` trong file `.setting` để đặt thời gian chờ giữa hai lượt (đơn vị giây, tối thiểu 5; 1800 giây = 30 phút). Đây là khoảng nghỉ sau khi xử lý xong, không phải thời gian xử lý một bài. Mỗi lượt chỉ xử lý một link. Xử lý thành công sẽ xóa **ô ở cột A** của dòng đó.
+- Chỉnh `intervalSeconds` trong file `config/settings.json` để đặt thời gian chờ giữa hai lượt (đơn vị giây, tối thiểu 5; 1800 giây = 30 phút). Đây là khoảng nghỉ sau khi xử lý xong, không phải thời gian xử lý một bài. Mỗi lượt chỉ xử lý một link. Xử lý thành công sẽ xóa **ô ở cột A** của dòng đó.
 - Dòng trống được bỏ qua trong cùng lượt quét. Khi hết link trong cột A, ứng dụng tự dừng. Bấm **Bắt đầu** để quét lại từ A1 nếu đã thêm link mới.
-- Để có quyền xóa ô, bật Google Sheets API cho project của service account và chia sẻ bảng cho `lun-83@loginwithjavascript.iam.gserviceaccount.com` với quyền **Người chỉnh sửa**. Khóa JSON hiện được chỉ định trong `.setting`.
+- Để có quyền xóa ô, bật Google Sheets API cho project của service account và chia sẻ bảng cho `lun-83@loginwithjavascript.iam.gserviceaccount.com` với quyền **Người chỉnh sửa**. Khóa JSON hiện được chỉ định trong `config/settings.json`.
 - Các lựa chọn Instagram, TikTok, Facebook và ngôn ngữ caption trong giao diện cũng áp dụng cho hàng đợi. Lỗi tải mạng được xác nhận xảy ra trước bước đăng sẽ giữ nguyên ô và tự thử lại tối đa 3 lượt theo `intervalSeconds`. Lỗi đăng hoặc lỗi chưa xác định được bước xảy ra sẽ dừng để bạn kiểm tra trước khi bấm **Bắt đầu** thử lại; nền tảng đã xác nhận thành công được bỏ qua. Link không hợp lệ và các lỗi xử lý khác được ghi lại rồi xóa ô để tiếp tục hàng đợi. Nếu Google Sheets chưa xóa được ô sau khi xử lý thành công, ứng dụng sẽ thử xóa lại mà không chạy lại link.
 - Khi xử lý, giao diện hiển thị bước hiện tại và thời gian của bước đó. Ảnh được tải tối đa 3 ảnh cùng lúc; video đã tạo được dùng lại khi thử lại nếu ảnh, nhạc và nội dung chữ không đổi. Video và nhạc được ghi dần xuống file tạm, chỉ timeout khi không nhận dữ liệu trong 30 giây, với giới hạn tổng 30 phút. Khi kết nối đứt, ứng dụng tải tiếp nếu CDN hỗ trợ xác nhận cùng phiên bản file, hoặc thử URL dự phòng do Kuaishou cung cấp. Chỉ file tải hoàn chỉnh được dùng để đăng; thao tác đăng bài không được tự động phát lại khi chưa rõ kết quả.
 

@@ -17,7 +17,7 @@ export function rowLink(value) {
 export function readSettings(filePath) {
   const settings = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   if (!Number.isInteger(settings.intervalSeconds) || settings.intervalSeconds < 5) {
-    throw new Error('.setting: intervalSeconds phải là số nguyên từ 5 trở lên');
+    throw new Error('config/settings.json: intervalSeconds phải là số nguyên từ 5 trở lên');
   }
   return settings;
 }
@@ -38,6 +38,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
   }
   let timer = null, busy = false, started = false, nextRunAt = null;
   const save = () => {
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(`${statePath}.tmp`, JSON.stringify(state, null, 2), 'utf8');
     fs.renameSync(`${statePath}.tmp`, statePath);
   };
@@ -47,7 +48,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
     try {
       const settings = readSettings(settingsPath);
       intervalSeconds = settings.intervalSeconds;
-      const keyPath = path.resolve(path.dirname(settingsPath), settings.serviceAccountKeyFile || 'google-service-account.json');
+      const keyPath = path.resolve(path.dirname(settingsPath), settings.serviceAccountKeyFile || 'credentials/google-service-account.json');
       if (!fs.existsSync(keyPath)) connectionError = `Thiếu file xác thực: ${path.basename(keyPath)}`;
     } catch (error) { connectionError = error.message; }
     return { ...state, intervalSeconds, connectionError, running: busy, nextRunAt, items: Object.values(state.items).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) };

@@ -1,11 +1,10 @@
-import { PROJECT_ROOT } from '../paths.js';
+import { SETTINGS_FILE } from '../paths.js';
 import fs from 'node:fs';
-import path from 'node:path';
 import { generateStoryScenes } from './tiktok-story.js';
 
 
 /**
- * Đọc Gemini API Key từ tham số, biến môi trường hoặc file .setting
+ * Đọc Gemini API Key từ tham số, biến môi trường hoặc file config/settings.json
  */
 export function resolveGeminiApiKey(explicitKey = '') {
   if (explicitKey && typeof explicitKey === 'string' && explicitKey.trim()) {
@@ -17,7 +16,7 @@ export function resolveGeminiApiKey(explicitKey = '') {
   if (process.env.AI_API_KEY && process.env.AI_API_KEY.trim()) {
     return process.env.AI_API_KEY.trim();
   }
-  const settingPath = path.join(PROJECT_ROOT, '.setting');
+  const settingPath = SETTINGS_FILE;
   try {
     if (fs.existsSync(settingPath)) {
       const data = JSON.parse(fs.readFileSync(settingPath, 'utf8'));

@@ -20,7 +20,7 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
   let token = null, expiresAt = 0;
   async function accessToken(settings) {
     if (token && Date.now() < expiresAt - 60000) return token;
-    const keyPath = path.resolve(path.dirname(settingsPath), settings.serviceAccountKeyFile || 'google-service-account.json');
+    const keyPath = path.resolve(path.dirname(settingsPath), settings.serviceAccountKeyFile || 'credentials/google-service-account.json');
     if (!fs.existsSync(keyPath)) throw new Error(`Thiếu file xác thực Google: ${keyPath}`);
     const key = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
     if (!key.client_email || !key.private_key) throw new Error('File service account không hợp lệ');
@@ -57,7 +57,7 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
 
   async function sheetTitle(settings) {
     const id = settings.sheetId;
-    if (!id) throw new Error('.setting thiếu sheetId');
+    if (!id) throw new Error('config/settings.json thiếu sheetId');
     const data = await api(settings, `${API}/${encodeURIComponent(id)}?fields=sheets.properties(sheetId,title)`);
     const found = data.sheets?.find(sheet => sheet.properties?.sheetId === (settings.sheetGid ?? 0));
     if (!found) throw new Error(`Không tìm thấy trang tính gid=${settings.sheetGid ?? 0}`);
@@ -73,23 +73,30 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
     },
     async readRows(settings) {
       const title = await sheetTitle(settings);
-      const range = `'${title.replace(/'/g, "''")}'!A:Z`;
+      const range = `'${title.replace(/'/g, "''")}'!A:ZZ`;
       const data = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(range)}`);
       return (data.values || []).map((row, index) => {
-        let colB = '';
-        let colC = false;
-        for (let c = 1; c < row.length; c += 2) {
-          const valLink = String(row[c] || '').trim();
-          const valCheck = row[c + 1] === true || String(row[c + 1] || '').trim().toUpperCase() === 'TRUE' || row[c + 1] === '✓';
-          if (valLink) colB = valLink;
-          if (valCheck) colC = true;
+        const colA = String(row[0] || '').trim();
+        const valC = row[2];
+        const colC = valC === true || String(valC || '').trim().toUpperCase() === 'TRUE' || valC === '✓';
+
+        // Thu thập tất cả các cột link (B, D, E, F, G...; cột C chỉ là true/false)
+        const links = {};
+        for (let c = 1; c < row.length; c++) {
+          if (c === 2) continue; // Cột C dành riêng cho trạng thái hoàn thành true/false
+          const val = String(row[c] || '').trim();
+          if (val) {
+            links[colToLetter(c + 1)] = val;
+          }
         }
+        const colB = links['B'] || Object.values(links)[0] || '';
+
         return {
           row: index + 1,
-          colA: String(row[0] || '').trim(),
+          colA,
           colB,
           colC,
-          colD: row[3] === true || String(row[3] || '').trim().toUpperCase() === 'TRUE' || row[3] === '✓'
+          links
         };
       });
     },
@@ -104,26 +111,57 @@ export function createGoogleSheet({ settingsPath, fetchImpl = fetch }) {
       const rangeA = `${safeTitle}!A${row}`;
       await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeA)}:clear`, 'POST');
 
-      // Check current row values from column B onwards to find the first empty pair of columns (B&C, D&E, F&G...)
+      // Đọc các giá trị hiện có từ cột B trở đi
+      // Cột C chỉ đánh true/false, các cột còn lại (B, D, E, F, G...) chỉ để link
       const rangeRow = `${safeTitle}!B${row}:ZZ${row}`;
       const rowData = await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeRow)}`);
       const rowValues = rowData.values?.[0] || [];
 
-      let colIndex = 2; // Column B is 2
-      while (true) {
-        const val1 = String(rowValues[colIndex - 2] || '').trim();
-        const val2 = String(rowValues[colIndex - 1] || '').trim();
-        if (!val1 && !val2) break;
-        colIndex += 2;
+      // Tìm cột link trống đầu tiên: B (col 2), D (col 4), E (col 5), F (col 6)...
+      let targetColIndex = 2;
+      const valB = String(rowValues[0] || '').trim();
+      if (!valB) {
+        targetColIndex = 2; // Cột B trống
+      } else {
+        let col = 4; // Bắt đầu tìm từ cột D trở đi
+        while (true) {
+          const val = String(rowValues[col - 2] || '').trim();
+          if (!val) {
+            targetColIndex = col;
+            break;
+          }
+          col++;
+        }
       }
 
-      const colStart = colToLetter(colIndex);
-      const colEnd = colToLetter(colIndex + 1);
-      const targetRange = `${safeTitle}!${colStart}${row}:${colEnd}${row}`;
-      await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`, 'PUT', {
-        range: targetRange,
-        values: [[link, true]]
-      });
+      if (targetColIndex === 2) {
+        // Cột B trống: ghi link vào B, true vào C
+        const targetRange = `${safeTitle}!B${row}:C${row}`;
+        await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`, 'PUT', {
+          range: targetRange,
+          values: [[link, true]]
+        });
+      } else if (targetColIndex === 4) {
+        // Cột D trống: C và D liền kề -> ghi true vào C, link vào D
+        const targetRange = `${safeTitle}!C${row}:D${row}`;
+        await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`, 'PUT', {
+          range: targetRange,
+          values: [[true, link]]
+        });
+      } else {
+        // Cột E, F, G... trống: ghi true vào C và ghi link vào cột tương ứng
+        const rangeC = `${safeTitle}!C${row}`;
+        await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(rangeC)}?valueInputOption=USER_ENTERED`, 'PUT', {
+          range: rangeC,
+          values: [[true]]
+        });
+        const colLetter = colToLetter(targetColIndex);
+        const targetRange = `${safeTitle}!${colLetter}${row}`;
+        await api(settings, `${API}/${encodeURIComponent(settings.sheetId)}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`, 'PUT', {
+          range: targetRange,
+          values: [[link]]
+        });
+      }
     }
   };
 }

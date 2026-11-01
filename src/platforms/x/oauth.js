@@ -1,10 +1,9 @@
-import { PROJECT_ROOT } from '../../paths.js';
+import { CONFIG_DIR, AUTH_DIR } from '../../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 
-const root = PROJECT_ROOT;
-export const CLIENT_FILE = path.join(root, '.x-client.json');
+export const CLIENT_FILE = path.join(CONFIG_DIR, 'x-client.json');
 export const X_SCOPES = ['tweet.read', 'tweet.write', 'users.read', 'media.write', 'offline.access'];
 
 export function createXOAuth({ clientId, authFile, fetchImpl = fetch, now = Date.now }) {
@@ -12,6 +11,7 @@ export function createXOAuth({ clientId, authFile, fetchImpl = fetch, now = Date
   let refreshing = null;
   function read() { try { return JSON.parse(fs.readFileSync(authFile, 'utf8')); } catch { return {}; } }
   function save(data) {
+    fs.mkdirSync(path.dirname(authFile), { recursive: true });
     fs.writeFileSync(`${authFile}.tmp`, JSON.stringify(data), { mode: 0o600 });
     fs.renameSync(`${authFile}.tmp`, authFile);
   }
@@ -89,4 +89,4 @@ export function createXOAuth({ clientId, authFile, fetchImpl = fetch, now = Date
 
 let clientId = process.env.X_CLIENT_ID;
 try { clientId ||= JSON.parse(fs.readFileSync(CLIENT_FILE, 'utf8')).clientId; } catch {}
-export const xOAuth = createXOAuth({ clientId, authFile: path.join(root, 'x_auth.json') });
+export const xOAuth = createXOAuth({ clientId, authFile: path.join(AUTH_DIR, 'x_auth.json') });
