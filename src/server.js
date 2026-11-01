@@ -171,6 +171,29 @@ function roundedCaptionFilter(quoteText, fontPath, textPath) {
   return `,${shadow},${rim},${panel},drawtext=fontfile='${fontPath}':textfile='${textPath}':fontcolor=white:expansion=none:fontsize=34:line_spacing=16:text_align=center:x=(w-text_w)/2:y=(h-text_h)/2+400:shadowcolor=black@0.45:shadowx=1:shadowy=2`;
 }
 
+function getImageDimensions(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    if (buf[0] === 0xFF && buf[1] === 0xD8) {
+      let offset = 2;
+      while (offset < buf.length) {
+        if (buf[offset] !== 0xFF) break;
+        const marker = buf[offset + 1];
+        if (marker === 0xC0 || marker === 0xC2) {
+          const h = buf.readUInt16BE(offset + 5);
+          const w = buf.readUInt16BE(offset + 7);
+          return { width: w, height: h };
+        }
+        const len = buf.readUInt16BE(offset + 2);
+        offset += 2 + len;
+      }
+    } else if (buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a') {
+      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    }
+  } catch {}
+  return null;
+}
+
 /**
  * Merge images and audio into a cinematic 9:16 vertical 1080x1920 video at 30 fps
  * with ambient blurred backdrop, full original image framing, silky-smooth crossfade transitions,
@@ -252,11 +275,16 @@ async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote 
       }
 
       let isFull9x16 = false;
-      try {
-        const { stdout: dims } = await execPromise(`ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${src}"`);
-        const [w, h] = dims.trim().split(',').map(Number);
-        if (w && h) isFull9x16 = (h / w) >= 1.70;
-      } catch {}
+      const dims = getImageDimensions(src);
+      if (dims && dims.width && dims.height) {
+        isFull9x16 = (dims.height / dims.width) >= 1.70;
+      } else {
+        try {
+          const { stdout: dimsOutput } = await execPromise(`ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${src}"`);
+          const [w, h] = dimsOutput.trim().split(',').map(Number);
+          if (w && h) isFull9x16 = (h / w) >= 1.70;
+        } catch {}
+      }
 
       let vf;
       if (isFull9x16) {
@@ -268,11 +296,14 @@ async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote 
         vf = `split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,boxblur=25:5,eq=brightness=-0.12[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos[fg_fit];[bg_blur][fg_fit]overlay=(W-w)/2:(H-h)/2,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
       }
 
-      await execPromise(`ffmpeg -y -i "${src}" -vf "${vf}" -frames:v 1 "${framedPath}"`);
+      await execPromise(`ffmpeg -y -threads 0 -i "${src}" -vf "${vf}" -frames:v 1 "${framedPath}"`);
       framedImages[i] = framedPath;
     };
-    for (let i = 0; i < numImages; i += 2) {
-      await Promise.all([i, i + 1].filter(index => index < numImages).map(prepareFrame));
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < numImages; i += BATCH_SIZE) {
+      const batch = [];
+      for (let j = i; j < Math.min(i + BATCH_SIZE, numImages); j++) batch.push(j);
+      await Promise.all(batch.map(prepareFrame));
     }
 
     // Step 2: Build video from framed images
@@ -285,7 +316,7 @@ async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote 
         ? `-i "${audioPath}"`
         : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
       const vf = `fade=t=out:st=${(totalDur - 0.5).toFixed(2)}:d=0.5`;
-      const cmd = `ffmpeg -y -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -vf "${vf}" -c:v libx264 -preset medium -crf 16 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -vf "${vf}" -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
       await execPromise(cmd);
       return outputPath;
     }
@@ -319,7 +350,7 @@ async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote 
       ? `-i "${audioPath}"`
       : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
 
-    const encodeCmd = `ffmpeg -y ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length}:a -c:v libx264 -preset medium -crf 16 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length}:a -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
     await execPromise(encodeCmd);
 
     console.log('[Reel] Hoàn tất tạo video chất lượng cao!');
@@ -1046,7 +1077,7 @@ const server = http.createServer(async (req, res) => {
       const igPostResult = await postToInstagram({
         imagePaths: uploadPaths,
         caption: captionText,
-        headless: false,
+        headless: true,
         shareToFacebook: doShareFB
       });
 
@@ -1161,7 +1192,7 @@ const server = http.createServer(async (req, res) => {
       await postToTikTok({
         videoPath: targetVideo,
         caption: captionText,
-        headless: false
+        headless: true
       });
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1313,11 +1344,14 @@ const server = http.createServer(async (req, res) => {
 
       const post = extractMedia(postContainer, html);
       setPipelineProgress(jobId, 'Đang chuẩn bị caption và hashtag…');
-      const generated = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, captionLang);
+      const [generated, generatedViResult] = await Promise.all([
+        generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, captionLang),
+        captionLang === 'vi'
+          ? Promise.resolve(null)
+          : generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, 'vi')
+      ]);
+      const generatedVi = generatedViResult || generated;
       const finalCaption = ensureCaptionHashtags(removeCaptionMentions((customCaption !== undefined && customCaption.trim() !== '') ? customCaption : generated.fullText), captionLang, post.title);
-      const generatedVi = captionLang === 'vi'
-        ? generated
-        : await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, 'vi');
       const tiktokCaption = (customCaption !== undefined && customCaption.trim() !== '')
         ? removeCaptionMentions(customCaption)
         : ((tikTokConfig?.caption && tikTokConfig.caption.trim() !== '')
@@ -1373,7 +1407,7 @@ const server = http.createServer(async (req, res) => {
       } else {
         const audioPath = path.join(outputDir, 'audio.m4a');
         const [localImagePaths] = await Promise.all([
-          mapLimit(post.images || [], 3, async (imgUrl, i) => {
+          mapLimit(post.images || [], 6, async (imgUrl, i) => {
             const filePath = path.join(outputDir, `image_${String(i + 1).padStart(2, '0')}.jpg`);
             await downloadImageAsJpg(imgUrl, filePath);
             return filePath;

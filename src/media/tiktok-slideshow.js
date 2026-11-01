@@ -3,7 +3,6 @@ import { SLIDESHOW_CONFIG_FILE } from '../paths.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { chromium } from 'playwright';
 import { renderWithCache } from './render-cache.js';
 import { generateAIStoryScenes } from '../content/ai-story.js';
 
@@ -85,6 +84,130 @@ export function wrapStory(text, width, fontSize, measure) {
   throw new Error('Chữ quá dài cho 2 dòng trong vùng an toàn; hãy rút ngắn nội dung cảnh');
 }
 
+const fontMeasurerCache = new Map();
+
+function createFontMeasurer(fontPath) {
+  try {
+    const buf = fs.readFileSync(fontPath);
+    const numTables = buf.readUInt16BE(4);
+    const tables = {};
+    for (let i = 0; i < numTables; i++) {
+      tables[buf.toString('ascii', 12 + i * 16, 16 + i * 16)] = {
+        offset: buf.readUInt32BE(12 + i * 16 + 8),
+        length: buf.readUInt32BE(12 + i * 16 + 12)
+      };
+    }
+
+    if (!tables['head'] || !tables['hhea'] || !tables['hmtx'] || !tables['cmap']) {
+      return (text, size) => text.length * size * 0.55;
+    }
+
+    const headOffset = tables['head'].offset;
+    const unitsPerEm = buf.readUInt16BE(headOffset + 18) || 1000;
+    const hheaOffset = tables['hhea'].offset;
+    const numOfHMetrics = buf.readUInt16BE(hheaOffset + 34);
+    const hmtxOffset = tables['hmtx'].offset;
+
+    function getAdvanceWidth(glyphId) {
+      if (glyphId < numOfHMetrics) {
+        return buf.readUInt16BE(hmtxOffset + glyphId * 4);
+      }
+      return buf.readUInt16BE(hmtxOffset + (numOfHMetrics - 1) * 4);
+    }
+
+    const cmapOffset = tables['cmap'].offset;
+    const numSubtables = buf.readUInt16BE(cmapOffset + 2);
+    let format4Offset = null;
+    let format12Offset = null;
+    for (let i = 0; i < numSubtables; i++) {
+      const offset = buf.readUInt32BE(cmapOffset + 4 + i * 8 + 4);
+      const format = buf.readUInt16BE(cmapOffset + offset);
+      if (format === 4 && !format4Offset) format4Offset = cmapOffset + offset;
+      if (format === 12 && !format12Offset) format12Offset = cmapOffset + offset;
+    }
+
+    let getGlyphId = () => 0;
+
+    if (format12Offset) {
+      const nGroups = buf.readUInt32BE(format12Offset + 12);
+      const groups = [];
+      for (let i = 0; i < nGroups; i++) {
+        groups.push({
+          start: buf.readUInt32BE(format12Offset + 16 + i * 12),
+          end: buf.readUInt32BE(format12Offset + 16 + i * 12 + 4),
+          startGlyph: buf.readUInt32BE(format12Offset + 16 + i * 12 + 8)
+        });
+      }
+      getGlyphId = (code) => {
+        let l = 0, r = groups.length - 1;
+        while (l <= r) {
+          const mid = (l + r) >> 1;
+          const g = groups[mid];
+          if (code >= g.start && code <= g.end) return g.startGlyph + (code - g.start);
+          if (code < g.start) r = mid - 1;
+          else l = mid + 1;
+        }
+        return 0;
+      };
+    } else if (format4Offset) {
+      const segCount = buf.readUInt16BE(format4Offset + 6) / 2;
+      const endCodes = [];
+      for (let i = 0; i < segCount; i++) endCodes.push(buf.readUInt16BE(format4Offset + 14 + i * 2));
+      const startCodes = [];
+      const startOffset = format4Offset + 16 + segCount * 2;
+      for (let i = 0; i < segCount; i++) startCodes.push(buf.readUInt16BE(startOffset + i * 2));
+      const idDeltas = [];
+      const deltaOffset = startOffset + segCount * 2;
+      for (let i = 0; i < segCount; i++) idDeltas.push(buf.readInt16BE(deltaOffset + i * 2));
+      const idRangeOffsets = [];
+      const rangeOffset = deltaOffset + segCount * 2;
+      for (let i = 0; i < segCount; i++) idRangeOffsets.push(buf.readUInt16BE(rangeOffset + i * 2));
+
+      getGlyphId = (code) => {
+        for (let i = 0; i < segCount; i++) {
+          if (code <= endCodes[i]) {
+            if (code >= startCodes[i]) {
+              if (idRangeOffsets[i] === 0) return (code + idDeltas[i]) & 0xFFFF;
+              const ro = rangeOffset + i * 2 + idRangeOffsets[i] + (code - startCodes[i]) * 2;
+              const glyph = buf.readUInt16BE(ro);
+              return glyph ? (glyph + idDeltas[i]) & 0xFFFF : 0;
+            }
+            break;
+          }
+        }
+        return 0;
+      };
+    }
+
+    const charCache = new Map();
+    function measureCharWidth(char) {
+      if (charCache.has(char)) return charCache.get(char);
+      const code = char.codePointAt(0);
+      const gid = getGlyphId(code);
+      const width = getAdvanceWidth(gid) / unitsPerEm;
+      charCache.set(char, width);
+      return width;
+    }
+
+    return function measureText(text, size = 1) {
+      let w = 0;
+      for (const ch of String(text).normalize('NFC')) {
+        w += measureCharWidth(ch);
+      }
+      return w * size;
+    };
+  } catch {
+    return (text, size) => text.length * size * 0.55;
+  }
+}
+
+function getFontMeasurer(fontPath) {
+  if (!fontMeasurerCache.has(fontPath)) {
+    fontMeasurerCache.set(fontPath, createFontMeasurer(fontPath));
+  }
+  return fontMeasurerCache.get(fontPath);
+}
+
 async function layoutTexts(texts, config) {
   const font = config.fontPath || ['C:/Windows/Fonts/seguisb.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'].find(p => fs.existsSync(p));
   if (!font || !fs.existsSync(font)) throw new Error('Không tìm thấy font; cấu hình text.fontPath với font hỗ trợ tiếng Việt');
@@ -96,30 +219,9 @@ async function layoutTexts(texts, config) {
   const position = number(config.positionY, 0.68, 0, 1, 'text.positionY');
   // Centre on the actual video, while respecting the larger of both safe margins.
   const width = 1080 - 2 * Math.max(marginLeft, marginRight) - 40;
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  let layouts;
-  try {
-    const page = await browser.newPage();
-    const fontData = fs.readFileSync(font).toString('base64');
-    const measurements = await page.evaluate(async ({ texts, fontData }) => {
-      const face = new FontFace('Slideshow', `url(data:font/ttf;base64,${fontData})`);
-      await face.load(); document.fonts.add(face);
-      const ctx = document.createElement('canvas').getContext('2d');
-      ctx.font = '100px Slideshow';
-      return texts.map(text => {
-        const words = String(text).normalize('NFC').trim().split(/\s+/).filter(Boolean);
-        const widths = {};
-        for (let i = 0; i < words.length; i++) for (let j = i + 1; j <= words.length; j++) {
-          const line = words.slice(i, j).join(' '); widths[line] = ctx.measureText(line).width / 100;
-        }
-        return widths;
-      });
-    }, { texts, fontData });
-    layouts = texts.map((text, i) => wrapStory(text, width, fontSize, (line, size) => (measurements[i][line] ?? 0) * size));
-  } finally { await browser.close(); }
+
+  const measure = getFontMeasurer(font);
+  const layouts = texts.map((text) => wrapStory(text, width, fontSize, measure));
   return { font, marginLeft, marginRight, marginTop, marginBottom, position, width, layouts };
 }
 

@@ -117,7 +117,7 @@ export async function interactiveLogin() {
 /**
  * Automatically post a video to TikTok via TikTok Studio / Creator Upload
  */
-export async function postToTikTok({ videoPath, caption, headless = false, onProgress = () => {} }) {
+export async function postToTikTok({ videoPath, caption, headless = true, onProgress = () => {} } = {}) {
   if (!videoPath || !fs.existsSync(videoPath)) {
     throw new Error(`Không tìm thấy file video để đăng lên TikTok: ${videoPath}`);
   }

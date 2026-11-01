@@ -150,7 +150,7 @@ async function dismissPopups(page) {
 /**
  * Automatically post images or Reel video to Instagram
  */
-export async function postToInstagram({ imagePaths, caption, headless = false, shareToFacebook = false, prepareOnly = false }) {
+export async function postToInstagram({ imagePaths, caption, headless = true, shareToFacebook = false, prepareOnly = false } = {}) {
   if (!imagePaths || imagePaths.length === 0) {
     throw new Error('Danh sách file tải lên trống');
   }

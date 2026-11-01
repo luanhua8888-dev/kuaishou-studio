@@ -79,7 +79,7 @@ async function waitForLogin(browser, context, page) {
   } finally { await browser.close().catch(() => {}); }
 }
 
-export async function postToThreads({ imagePaths, caption, headless = false, prepareOnly = false }) {
+export async function postToThreads({ imagePaths, caption, headless = true, prepareOnly = false } = {}) {
   const text = prepareThreadsCaption(caption);
   if (!imagePaths?.length || imagePaths.some(file => !fs.existsSync(file))) {
     throw new Error('Không tìm thấy ảnh/video để đăng Threads.');
