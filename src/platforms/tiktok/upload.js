@@ -58,8 +58,7 @@ export async function fillTikTokCaption(page, caption) {
   } catch {}
 
   await box.fill(text);
-  // Close hashtag suggestions and commit the editable field before submitting.
-  await box.press('Escape');
+  // Blur the editor without Escape: Studio uses Escape to open its exit dialog.
   await box.press('Tab');
   const normalize = value => value.replace(/\s+/g, ' ').trim();
   const currentText = normalize(await box.innerText());
@@ -72,6 +71,22 @@ export async function fillTikTokCaption(page, caption) {
     }
     throw new Error('TikTok không giữ đúng mô tả/hashtag sau khi nhập. Video chưa được bấm Đăng.');
   }
+}
+
+export async function dismissTikTokExitDialog(page) {
+  for (const frame of page.frames()) {
+    const heading = frame.getByText(/^\s*(Bạn có chắc bạn muốn thoát\?|Are you sure you want to (?:exit|leave)\?)\s*$/i).first();
+    if (!await heading.isVisible().catch(() => false)) continue;
+    // Cancel only this known discard prompt; never approve leaving or resubmit.
+    const cancel = frame.getByRole('button', { name: /^\s*(Hủy|Cancel|Stay)\s*$/i }).filter({ visible: true });
+    if (await cancel.count() === 1) {
+      await cancel.click({ timeout: 5000 });
+      await heading.waitFor({ state: 'hidden', timeout: 5000 });
+      return true;
+    }
+    throw new Error('TikTok đang hỏi xác nhận thoát nhưng không tìm thấy nút Hủy duy nhất. Hãy kiểm tra TikTok Studio trước khi thử lại để tránh đăng trùng.');
+  }
+  return false;
 }
 
 export async function waitForTikTokPostButton(page, { polls = 80, delayMs = 1500 } = {}) {

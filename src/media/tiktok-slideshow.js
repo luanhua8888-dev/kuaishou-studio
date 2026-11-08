@@ -55,7 +55,9 @@ export function planSlideshow(imageCount, config = {}) {
 export function wrapStory(text, width, fontSize, measure) {
   const words = String(text).normalize('NFC').trim().split(/\s+/).filter(Boolean);
   if (!words.length) return { text: '', fontSize };
-  for (let size = fontSize; size >= 30; size--) {
+
+  // 1. Cố gắng chia thành tối đa 2 dòng đẹp mắt (size từ fontSize xuống 26)
+  for (let size = fontSize; size >= 26; size--) {
     const lines = [''];
     let fits = true;
     for (const word of words) {
@@ -81,6 +83,45 @@ export function wrapStory(text, width, fontSize, measure) {
       return { text: lines.join('\n'), fontSize: size };
     }
   }
+
+  // 2. Nếu câu dài, cho phép hiển thị tối đa 3 dòng (size từ 36 xuống 24)
+  for (let size = Math.min(fontSize, 36); size >= 24; size--) {
+    const lines = [''];
+    let fits = true;
+    for (const word of words) {
+      if (measure(word, size) > width) { fits = false; break; }
+      const last = lines.length - 1;
+      const candidate = lines[last] ? `${lines[last]} ${word}` : word;
+      if (measure(candidate, size) <= width) lines[last] = candidate;
+      else lines.push(word);
+    }
+    if (fits && lines.length <= 3) {
+      return { text: lines.join('\n'), fontSize: size };
+    }
+  }
+
+  // 3. Nếu câu cực kỳ dài vượt quá 3 dòng, tự động cắt ngắn nhẹ nhàng kèm dấu …
+  // Đảm bảo pipeline luôn chạy thông suốt, không bị gián đoạn hay crash giữa chừng
+  if (words.length > 3 && width >= 250) {
+    const targetSize = 26;
+    for (let count = words.length - 1; count >= 1; count--) {
+      const candidateText = words.slice(0, count).join(' ') + '…';
+      const subWords = candidateText.split(/\s+/);
+      const lines = [''];
+      let fits = true;
+      for (const word of subWords) {
+        if (measure(word, targetSize) > width) { fits = false; break; }
+        const last = lines.length - 1;
+        const candidate = lines[last] ? `${lines[last]} ${word}` : word;
+        if (measure(candidate, targetSize) <= width) lines[last] = candidate;
+        else lines.push(word);
+      }
+      if (fits && lines.length <= 3) {
+        return { text: lines.join('\n'), fontSize: targetSize };
+      }
+    }
+  }
+
   throw new Error('Chữ quá dài cho 2 dòng trong vùng an toàn; hãy rút ngắn nội dung cảnh');
 }
 

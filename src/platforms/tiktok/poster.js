@@ -1,6 +1,6 @@
 import { AUTH_DIR, SCREENSHOTS_DIR } from '../../paths.js';
 import { chromium } from 'playwright';
-import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from './upload.js';
+import { waitForTikTokUpload, waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption, dismissTikTokExitDialog } from './upload.js';
 import { removeCaptionMentions } from '../../content/caption-text.js';
 import { sanitizeVideoAudioForCopyright } from '../../media/anti-copyright.js';
 import path from 'path';
@@ -205,6 +205,7 @@ export async function postToTikTok({ videoPath, caption, headless = true, onProg
     onProgress('TikTok: đang đăng và chờ xác nhận…');
     // Reacquire after scans: TikTok can replace the button or navigate away.
     const postBtn = await waitForTikTokPostButton(page);
+    await dismissTikTokExitDialog(page);
     try {
       await postBtn.click({ timeout: 5000 });
     } catch {
@@ -239,6 +240,7 @@ export async function postToTikTok({ videoPath, caption, headless = true, onProg
     const checkSuccess = async () => {
       for (let i = 0; i < 45; i++) {
         await page.waitForTimeout(2000);
+        await dismissTikTokExitDialog(page);
         const url = page.url();
         if (url.includes('/tiktokstudio/content') || url.includes('/manage')) {
           console.log('[TikTok] Đã chuyển hướng về trang quản lý bài đăng, đăng video thành công!');

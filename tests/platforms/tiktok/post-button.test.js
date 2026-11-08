@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption } from '../../../src/platforms/tiktok/upload.js';
+import { waitForTikTokPostButton, waitForTikTokChecks, fillTikTokCaption, dismissTikTokExitDialog } from '../../../src/platforms/tiktok/upload.js';
 
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });
@@ -15,6 +15,28 @@ async function fixture(html, run, pathname = '/tiktokstudio/upload') {
     await run(page);
   } finally { await page.close(); }
 }
+
+test('caption entry does not trigger Studio Escape navigation', async () => {
+  await fixture('<div contenteditable="true"></div><script>document.addEventListener("keydown", e => { if(e.key === "Escape") window.exitRequested = true; });</script>', async page => {
+    await fillTikTokCaption(page, 'Mô tả #video');
+    assert.equal(await page.evaluate(() => !!window.exitRequested), false);
+  });
+});
+
+test('cancels an exit prompt without leaving or submitting again', async () => {
+  await fixture(`<div id="dialog"><h2>Bạn có chắc bạn muốn thoát?</h2><button onclick="window.left=true">Thoát</button><button onclick="this.parentElement.remove()">Hủy</button></div><button onclick="window.posts=(window.posts||0)+1">Đăng</button>`, async page => {
+    assert.equal(await dismissTikTokExitDialog(page), true);
+    assert.equal(await dismissTikTokExitDialog(page), false);
+    assert.equal(await page.evaluate(() => !!window.left || !!window.posts), false);
+  });
+});
+
+test('does not cancel unrelated dialogs', async () => {
+  await fixture('<div role="dialog">Kiểm tra bản quyền<button onclick="window.cancelled=true">Hủy</button></div>', async page => {
+    assert.equal(await dismissTikTokExitDialog(page), false);
+    assert.equal(await page.evaluate(() => !!window.cancelled), false);
+  });
+});
 
 test('finds a visible role button with whitespace and ignores a hidden duplicate', async () => {
   await fixture('<div role="button" id="post">  Đăng  </div><button hidden>Đăng</button>', async page => {

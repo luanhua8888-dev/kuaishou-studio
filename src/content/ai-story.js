@@ -143,18 +143,19 @@ export async function generateAIStoryScenes({
       const prompt = buildGeminiPrompt({ title, moodQuote, author, musicName, musicArtist, sceneCount });
       console.log(`[TikTok AI] Đang gửi yêu cầu sinh câu chuyện tới Google Gemini AI cho bài viết: "${title || moodQuote}"...`);
       
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
       let rawText;
-      try {
-        rawText = await callGeminiApi({ prompt, apiKey: key, model: 'gemini-2.5-flash' });
-      } catch (err25) {
+      let lastErr;
+      for (const m of candidateModels) {
         try {
-          console.warn(`[TikTok AI] Thử lại với model gemini-flash-latest (${err25.message.slice(0, 80)})...`);
-          rawText = await callGeminiApi({ prompt, apiKey: key, model: 'gemini-flash-latest' });
-        } catch {
-          console.warn(`[TikTok AI] Thử lại với model gemini-2.5-flash-lite...`);
-          rawText = await callGeminiApi({ prompt, apiKey: key, model: 'gemini-2.5-flash-lite' });
+          rawText = await callGeminiApi({ prompt, apiKey: key, model: m });
+          if (rawText) break;
+        } catch (errModel) {
+          lastErr = errModel;
+          console.warn(`[TikTok AI] Thử lại với model tiếp theo (${errModel.message.slice(0, 80)})...`);
         }
       }
+      if (!rawText && lastErr) throw lastErr;
 
       const aiScenes = parseGeminiStoryResponse(rawText, sceneCount);
       console.log('[TikTok AI] Đã tạo thành công câu chuyện từ Gemini AI:');
