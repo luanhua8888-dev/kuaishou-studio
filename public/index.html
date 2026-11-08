@@ -1237,7 +1237,9 @@
       const latestWarning = currentItem?.warning;
       const queueMessage = data.running
         ? `Đang xử lý dòng ${data.cursor} · ${data.stage || 'Đang chuẩn bị…'}${!data.enabled ? ' · Sẽ dừng sau dòng này' : ''}`
-        : data.enabled ? `Đang chờ · Dòng tiếp theo: ${data.cursor}` : 'Đã tạm dừng';
+        : data.enabled ? (data.tiktokOnly && data.nextRunAt
+          ? `Lịch TikTok · dòng ${data.cursor} · ${new Date(data.nextRunAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (Việt Nam)`
+          : `Đang chờ · Dòng tiếp theo: ${data.cursor}`) : 'Đã tạm dừng';
       sheetStatus.textContent = data.connectionError
         || data.error
         || `${queueMessage}${!data.running && latestWarning ? ` · ${latestWarning}` : ''}`;

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { SLIDESHOW_CONFIG_FILE } from '../paths.js';
+import { SLIDESHOW_CONFIG_FILE, PROJECT_ROOT } from '../paths.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,7 +8,7 @@ import { generateAIStoryScenes } from '../content/ai-story.js';
 
 const run = promisify(execFile);
 const FPS = 30;
-const VERSION = 3;
+const VERSION = 6;
 const DEFAULT_STORY = [
   'Nếu được đi trốn một ngày, mình muốn đến đây.',
   'Giữa thiên nhiên, mọi thứ như chậm lại…',
@@ -250,20 +250,23 @@ function getFontMeasurer(fontPath) {
 }
 
 async function layoutTexts(texts, config) {
-  const font = config.fontPath || ['C:/Windows/Fonts/seguisb.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'].find(p => fs.existsSync(p));
+  const style = config.style || 'editorial';
+  if (!['editorial', 'bold', 'paper', 'diary'].includes(style)) throw new Error('text.style phải là editorial, bold, paper hoặc diary');
+  const font = config.fontPath || (!['bold', 'diary'].includes(style) ? path.join(PROJECT_ROOT, 'assets/fonts/Lora-Italic.ttf') :
+    ['C:/Windows/Fonts/arialbd.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'].find(p => fs.existsSync(p)));
   if (!font || !fs.existsSync(font)) throw new Error('Không tìm thấy font; cấu hình text.fontPath với font hỗ trợ tiếng Việt');
-  const marginLeft = number(config.marginLeft, 200, 24, 400, 'text.marginLeft');
-  const marginRight = number(config.marginRight, 200, 120, 400, 'text.marginRight');
+  const marginLeft = number(config.marginLeft, 140, 24, 400, 'text.marginLeft');
+  const marginRight = number(config.marginRight, 180, 120, 400, 'text.marginRight');
   const marginTop = number(config.marginTop, 180, 100, 600, 'text.marginTop');
   const marginBottom = number(config.marginBottom, 420, 300, 700, 'text.marginBottom');
-  const fontSize = number(config.fontSize, 44, 30, 80, 'text.fontSize');
-  const position = number(config.positionY, 0.68, 0, 1, 'text.positionY');
+  const fontSize = number(config.fontSize, 64, 30, 80, 'text.fontSize');
+  const position = number(config.positionY, 0.72, 0, 1, 'text.positionY');
   // Centre on the actual video, while respecting the larger of both safe margins.
   const width = 1080 - 2 * Math.max(marginLeft, marginRight) - 40;
 
   const measure = getFontMeasurer(font);
   const layouts = texts.map((text) => wrapStory(text, width, fontSize, measure));
-  return { font, marginLeft, marginRight, marginTop, marginBottom, position, width, layouts };
+  return { font, style, marginLeft, marginRight, marginTop, marginBottom, position, width, layouts };
 }
 
 export async function createTikTokSlideshow(imageInput, audioPath, outputPath, overrides = {}) {
@@ -370,7 +373,8 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       const textFilters = [];
       layout.layouts.forEach((item, i) => {
         if (!item.text) return;
-        const height = item.text.split('\n').length * (item.fontSize + 10) + 32;
+        const lineHeight = Math.round(item.fontSize * 1.38);
+        const height = item.text.split('\n').length * lineHeight + 32;
         const y = Math.round(layout.marginTop + layout.position * (1920 - layout.marginTop - layout.marginBottom - height));
         const scene = plan.scenes[i];
         // The caption changes at the midpoint of each dissolve, never two captions together.
@@ -379,14 +383,40 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         while (endIndex < texts.length && !texts[endIndex]) endIndex++;
         const end = endIndex === texts.length ? plan.duration : (plan.scenes[endIndex].start + plan.transitionFrames / 2) / FPS;
         const enable = `gte(t,${begin})*lt(t,${end})`;
-        // Individual lines have the same centre; no oversized rectangular panel.
+        // Short fades soften scene changes while keeping most of each beat fully readable.
+        const fade = Math.min(0.22, (end - begin) / 4);
+        const alpha = `min(1,min(max(0,(t-${begin})/${fade}),max(0,(${end}-t)/${fade})))`;
+        const left = (1080 - layout.width) / 2;
+        if (layout.style === 'editorial') {
+          // A broad feathered scrim supports bright footage without outlining the letterforms.
+          const top = y - 100;
+          const bandHeight = height + 200;
+          for (let strip = 0; strip < 32; strip++) {
+            const opacity = (0.48 * Math.sin(Math.PI * (strip + 0.5) / 32) ** 2).toFixed(3);
+            textFilters.push(`drawbox=x=0:y=${Math.round(top + strip * bandHeight / 32)}:w=iw:h=${Math.ceil(bandHeight / 32)}:color=0x101719@${opacity}:t=fill:enable='${enable}'`);
+          }
+        } else if (layout.style === 'paper') {
+          textFilters.push(`drawbox=x=${left - 30}:y=${y - 18}:w=${layout.width + 60}:h=${height + 24}:color=0xF3EDDF@0.96:t=fill:enable='${enable}'`);
+          textFilters.push(`drawbox=x=${left - 30}:y=${y - 18}:w=5:h=${height + 24}:color=0xB64B36:t=fill:enable='${enable}'`);
+        }
         item.text.split('\n').forEach((line, lineIndex) => {
           const lineFile = path.join(temp, `text-${i}-${lineIndex}.txt`);
           fs.writeFileSync(lineFile, line, 'utf8');
-          textFilters.push(`drawtext=fontfile='${filterPath(layout.font)}':textfile='${filterPath(lineFile)}':expansion=none:fontsize=${item.fontSize}:fontcolor=white:borderw=1.5:bordercolor=black@0.55:shadowcolor=black@0.65:shadowx=1:shadowy=3:x=(w-text_w)/2:y=${y + 16 + lineIndex * (item.fontSize + 14)}:enable='${enable}'`);
+          const treatment = layout.style === 'diary'
+            ? 'fontcolor=white:borderw=0:shadowcolor=black@0.22:shadowx=0:shadowy=2:x=(w-text_w)/2'
+            : layout.style === 'bold'
+            ? `fontcolor=${lineIndex === 0 ? '0xDFFF70' : 'white'}:borderw=0:box=1:boxcolor=0x101719@0.90:boxborderw=14:shadowx=0:shadowy=0:x=(w-text_w)/2`
+            : `fontcolor=${layout.style === 'paper' ? '0x252C2A' : '0xFFF5E5'}:borderw=0:shadowcolor=black@${layout.style === 'paper' ? '0' : '0.35'}:shadowx=0:shadowy=2:x=${left}`;
+          textFilters.push(`drawtext=fontfile='${filterPath(layout.font)}':textfile='${filterPath(lineFile)}':expansion=none:fontsize=${item.fontSize}:alpha='${alpha}':${treatment}:y=${y + 16 + lineIndex * lineHeight}:enable='${enable}'`);
         });
+        if (layout.style === 'diary' && config.sceneSubtitles?.[i]) {
+          const subtitleFile = path.join(temp, `subtitle-${i}.txt`);
+          fs.writeFileSync(subtitleFile, String(config.sceneSubtitles[i]).normalize('NFC').toUpperCase().split('').join(' '), 'utf8');
+          textFilters.push(`drawtext=fontfile='${filterPath(layout.font)}':textfile='${filterPath(subtitleFile)}':expansion=none:fontsize=18:fontcolor=white:alpha='${alpha}':shadowcolor=black@0.25:shadowy=1:x=(w-text_w)/2:y=${y + 24 + item.text.split('\n').length * lineHeight}:enable='${enable}'`);
+        }
       });
-      filters.push(`[${last}]${textFilters.length ? textFilters.join(',') + ',' : ''}fps=30,format=yuv420p[out]`);
+      const grade = layout.style === 'diary' ? 'eq=saturation=0.80:contrast=1.025:brightness=0.012,colorbalance=rs=0.018:bs=-0.018,noise=alls=2:allf=t,' : '';
+      filters.push(`[${last}]${grade}${textFilters.length ? textFilters.join(',') + ',' : ''}fps=30,format=yuv420p[out]`);
       filters.push(`[${clips.length}:a]volume=${volume},apad,atrim=duration=${plan.duration},asetpts=PTS-STARTPTS${audioFade ? `,afade=t=in:d=${audioFade},afade=t=out:st=${plan.duration - audioFade}:d=${audioFade}` : ''}[audio]`);
       const script = path.join(temp, 'filters.txt'); fs.writeFileSync(script, filters.join(';\n'));
       args.push(

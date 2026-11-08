@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomInt } from 'node:crypto';
 
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing';
 const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, autoPostX: false, asReel: true, captionLang: 'en', enableMoodQuote: true };
@@ -22,7 +23,7 @@ export function readSettings(filePath) {
   return settings;
 }
 
-export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, schedule = setTimeout }) {
+export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, schedule = setTimeout, tiktokPrimeTime = false }) {
   let state = { enabled: false, options: { ...DEFAULT_OPTIONS }, cursor: 1, blankCount: 0, items: {}, lastCheck: null, error: null };
   if (fs.existsSync(statePath)) {
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf8'));
@@ -56,7 +57,9 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
   const plan = () => {
     if (!started || !state.enabled) return;
     try {
-      const delay = readSettings(settingsPath).intervalSeconds * 1000;
+      const delay = tiktokPrimeTime
+        ? nextTikTokPrimeTimeDelay(Date.now())
+        : readSettings(settingsPath).intervalSeconds * 1000;
       nextRunAt = new Date(Date.now() + delay).toISOString();
       timer = schedule(() => { timer = null; nextRunAt = null; void tick().finally(plan); }, delay);
       timer?.unref?.();
@@ -245,4 +248,28 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
       return snapshot();
     }
   };
+}
+
+// TikTok-only queue: choose a fresh, jittered evening slot in Vietnam time each day.
+export function nextTikTokPrimeTimeDelay(now = Date.now(), random = randomInt) {
+  const timezone = 'Asia/Ho_Chi_Minh';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const date = `${values.year}-${values.month}-${values.day}`;
+  const hour = Number(values.hour);
+  const todayAt = (minute) => Date.parse(`${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}:00+07:00`);
+  const start = 18 * 60, end = 22 * 60;
+  const earliest = Math.max(start, hour * 60 + 20);
+  if (earliest < end) {
+    const minute = Math.min(end - 1, earliest + random(Math.max(1, end - earliest)));
+    return todayAt(minute) - now;
+  }
+  const tomorrow = new Date(todayAt(12 * 60) + 86400000);
+  const tomorrowParts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(tomorrow);
+  const tomorrowValues = Object.fromEntries(tomorrowParts.map(part => [part.type, part.value]));
+  const tomorrowDate = `${tomorrowValues.year}-${tomorrowValues.month}-${tomorrowValues.day}`;
+  const minute = start + random(end - start);
+  return Date.parse(`${tomorrowDate}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}:00+07:00`) - now;
 }

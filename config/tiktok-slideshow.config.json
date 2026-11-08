@@ -4,10 +4,11 @@
   "transitionSeconds": 0.3,
   "zoomAmount": 0,
   "text": {
-    "fontSize": 44,
-    "positionY": 0.68,
-    "marginLeft": 200,
-    "marginRight": 200,
+    "style": "editorial",
+    "fontSize": 64,
+    "positionY": 0.72,
+    "marginLeft": 140,
+    "marginRight": 180,
     "marginTop": 180,
     "marginBottom": 420
   },

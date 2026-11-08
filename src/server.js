@@ -43,6 +43,7 @@ const sheetQueue = createSheetQueue({
   statePath: path.join(QUEUE_DIR, X_ONLY ? 'sheet-queue-x-state.json' : TIKTOK_ONLY ? 'sheet-queue-tiktok-state.json' : 'sheet-queue-state.json'),
   settingsPath: SETTINGS_FILE,
   sheet: googleSheet,
+  tiktokPrimeTime: TIKTOK_ONLY,
   async runPipeline(url, options) {
     const jobId = `sheet-${Date.now()}`;
     sheetJobId = jobId;
@@ -1291,6 +1292,7 @@ const server = http.createServer(async (req, res) => {
         const payload = await readJsonBody(req);
         if (TIKTOK_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostTikTok: true };
         if (X_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true };
+        if (TIKTOK_ONLY && payload.enabled === true && !payload.runNextNow && !payload.restartFromFirst) payload.runNow = false;
         result = sheetQueue.configure(payload);
       }
       else { res.writeHead(405); res.end(); return; }
