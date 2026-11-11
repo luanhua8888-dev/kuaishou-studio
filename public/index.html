@@ -568,6 +568,19 @@
               <label class="toggle-switch"><input type="checkbox" id="chkAutoPostX" aria-label="Đăng lên X"><span class="slider"></span></label>
             </div>
           </div>
+          <div class="switch-card" id="swCardYouTube">
+            <div class="platform-lead">
+              <div class="platform-icon" aria-hidden="true" style="background:#2a171a;border:1px solid #5f252a;color:#ff4b55;font-weight:800">▶</div>
+              <div class="platform-meta">
+                <span class="platform-name">YouTube Shorts</span>
+                <span class="platform-desc">Video dọc · tối đa 3 phút</span>
+              </div>
+            </div>
+            <div class="platform-controls">
+              <button type="button" id="youtubeConnectBtn" class="ig-status-pill" title="Kết nối kênh YouTube">Kết nối</button>
+              <label class="toggle-switch"><input type="checkbox" id="chkAutoPostYouTube" aria-label="Đăng lên YouTube Shorts"><span class="slider"></span></label>
+            </div>
+          </div>
         </div>
         <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook liên kết qua Instagram.</p>
       </section>
@@ -1153,6 +1166,7 @@
         autoPostFB: chkAutoPostFB.checked,
         autoPostThreads: chkAutoPostThreads.checked,
         autoPostX: chkAutoPostX.checked,
+        autoPostYouTube: chkAutoPostYouTube.checked,
         asReel: chkAsReel.checked,
         captionLang: captionLangSelect.value,
         enableMoodQuote: chkAddMoodText.checked
@@ -1195,6 +1209,7 @@
         chkAutoPostFB.checked = data.options.autoPostFB;
         chkAutoPostThreads.checked = Boolean(data.options.autoPostThreads);
         chkAutoPostX.checked = Boolean(data.options.autoPostX);
+        chkAutoPostYouTube.checked = Boolean(data.options.autoPostYouTube);
         chkAsReel.checked = data.options.asReel;
         chkAddMoodText.checked = data.options.enableMoodQuote;
         captionLangSelect.value = data.options.captionLang;
@@ -1260,6 +1275,7 @@
     const chkAutoPostTikTok = document.getElementById('chkAutoPostTikTok');
     const chkAutoPostFB = document.getElementById('chkAutoPostFB');
     const chkAutoPostX = document.getElementById('chkAutoPostX');
+    const chkAutoPostYouTube = document.getElementById('chkAutoPostYouTube');
     const swCardX = document.getElementById('swCardX');
     const chkAutoPostThreads = document.getElementById('chkAutoPostThreads');
     const swCardThreads = document.getElementById('swCardThreads');
@@ -1272,7 +1288,7 @@
     const moodTextInput = document.getElementById('moodTextInput');
     const moodTextContainer = document.getElementById('moodTextContainer');
 
-    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
+    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAutoPostYouTube, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
       input.addEventListener('change', () => setTimeout(async () => {
         if (!sheetSettingsLoaded || threadsOnlyMode) return;
         try {
@@ -1376,6 +1392,22 @@
     const tiktokStatusBtn = document.getElementById('tiktokStatusBtn');
     const tiktokDot = document.getElementById('tiktokDot');
     const tiktokStatusText = document.getElementById('tiktokStatusText');
+    const youtubeConnectBtn = document.getElementById('youtubeConnectBtn');
+    async function checkYouTubeStatus() {
+      try {
+        const response = await fetch('/api/youtube/status', { cache: 'no-store' });
+        const data = await response.json();
+        youtubeConnectBtn.textContent = data.connected ? `Đã kết nối · ${data.channel}` : (data.configured ? 'Kết nối' : 'Thiếu OAuth');
+        youtubeConnectBtn.title = data.connected ? `Kênh YouTube: ${data.channel}` : 'Kết nối kênh YouTube';
+        youtubeConnectBtn.classList.toggle('connected', Boolean(data.connected));
+      } catch { youtubeConnectBtn.textContent = 'Chưa kết nối'; }
+    }
+    checkYouTubeStatus();
+    setInterval(checkYouTubeStatus, 3000);
+    youtubeConnectBtn.addEventListener('click', () => {
+      window.open(`/api/youtube/oauth/start`, '_blank', 'noopener,noreferrer');
+      showStatus('Đang mở Google để bạn chọn kênh YouTube và cấp quyền tải video.', 'loading');
+    });
 
     const fbStatusBtn = document.getElementById('fbStatusBtn');
     const fbDot = document.getElementById('fbDot');
@@ -1451,7 +1483,7 @@
 
     // Toggle switch UI states & button text update
     function updateSwitchUI() {
-      const selectedCount = [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX]
+      const selectedCount = [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAutoPostYouTube]
         .filter(input => input.checked && input.closest('.switch-card').style.display !== 'none').length;
       setMetric('channelsMetric', selectedCount);
       document.getElementById('platformSelectionCount').textContent = `${selectedCount} đang chọn`;
@@ -1460,6 +1492,7 @@
       swCardFB.classList.toggle('active-fb', chkAutoPostFB.checked);
       swCardThreads.classList.toggle('active-ig', chkAutoPostThreads.checked);
       swCardX.classList.toggle('active-ig', chkAutoPostX.checked);
+      document.getElementById('swCardYouTube').classList.toggle('active-ig', chkAutoPostYouTube.checked);
 
       const hasUrl = Boolean(urlInput.value.trim());
       if (hasUrl) {
@@ -1691,6 +1724,7 @@
       const shouldPostFB = chkAutoPostFB.checked;
       const shouldPostThreads = chkAutoPostThreads.checked;
       const shouldPostX = chkAutoPostX.checked;
+      const shouldPostYouTube = chkAutoPostYouTube.checked;
 
       btnRun.disabled = true;
       btnOpenFolder.style.display = 'none';
@@ -1753,6 +1787,7 @@
             autoPostFB: shouldPostFB,
             autoPostThreads: shouldPostThreads,
             autoPostX: shouldPostX,
+            autoPostYouTube: shouldPostYouTube,
             asReel: chkAsReel.checked,
             captionLang: captionLangSelect.value,
             jobId,
@@ -1779,6 +1814,7 @@
         if (data.fbPosted) postedList.push('FACEBOOK');
         if (data.threadsPosted) postedList.push('THREADS');
         if (data.xPosted) postedList.push('X');
+        if (data.youtubePosted) postedList.push(data.youtubeScheduledAt ? 'YOUTUBE SHORTS (ĐÃ TẢI LÊN VÀ HẸN GIỜ)' : 'YOUTUBE SHORTS (ĐÃ TẢI LÊN)');
 
         const typeStr = data.isVideo ? 'video gốc' : `${data.count} ảnh`;
         let successMsg = `Hoàn tất! Đã tải ${typeStr}.`;
@@ -1789,6 +1825,7 @@
           successMsg += ` Đã lưu vào: ${data.downloadPath}`;
         }
         if (data.threadsWarning) successMsg += ` Threads: ${data.threadsWarning}`;
+        if (data.youtubeWarning) successMsg += ` YouTube: ${data.youtubeWarning}`;
         if (data.skipWarning) successMsg += ` ${data.skipWarning}`;
         showStatus(successMsg, data.threadsWarning ? 'error' : 'success');
 

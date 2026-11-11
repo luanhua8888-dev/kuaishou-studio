@@ -1,6 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { publishPlatforms } from '../../src/platforms/publish.js';
+
+test('YouTube uses its own clean video while TikTok keeps its captioned video', async () => {
+  const result = await publishPlatforms({ autoPostTikTok: true, autoPostYouTube: true }, {
+    videoPath: 'tiktok-captioned.mp4', youtubeVideoPath: 'youtube-clean.mp4', caption: 'Example'
+  }, {
+    tiktok: async input => { assert.equal(input.videoPath, 'tiktok-captioned.mp4'); return { success: true }; },
+    youtube: async input => { assert.equal(input.videoPath, 'youtube-clean.mp4'); return { success: true }; }
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.youtubePosted, true);
+});
+
+test('YouTube does not fall back to the captioned TikTok video', async () => {
+  const result = await publishPlatforms({ autoPostYouTube: true }, { videoPath: 'tiktok-captioned.mp4' }, {
+    youtube: async () => { assert.fail('Must not upload TikTok video'); }
+  });
+  assert.equal(result.youtubePosted, false);
+  assert.equal(result.partialFailure, true);
+});
 import { UPLOAD_INPUT_UNAVAILABLE } from '../../src/platforms/instagram/upload.js';
 
 const options = { autoPostIG: true, autoPostFB: true, autoPostTikTok: true, autoPostThreads: true };

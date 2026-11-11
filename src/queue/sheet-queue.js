@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomInt } from 'node:crypto';
 
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing';
-const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, autoPostX: false, asReel: true, captionLang: 'en', enableMoodQuote: true };
+const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, autoPostX: false, autoPostYouTube: false, asReel: true, captionLang: 'en', enableMoodQuote: true };
 
 export function rowLink(value) {
   const match = String(value || '').match(/https?:\/\/[^\s"<>]+/i);
@@ -116,7 +116,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         entry.status = 'running'; entry.warning = null; entry.updatedAt = new Date().toISOString(); save();
         try {
           const requested = { ...state.options };
-          for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted'], ['autoPostX', 'xPosted']]) {
+          for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted'], ['autoPostX', 'xPosted'], ['autoPostYouTube', 'youtubePosted']]) {
             if (entry.published?.[flag]) requested[option] = false;
           }
           const result = await runPipeline(url, requested);
@@ -124,13 +124,14 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           entry.skippedPlatforms = [...new Set([...(entry.skippedPlatforms || []), ...(result.skippedPlatforms || [])])];
           entry.skipWarning = result.skipWarning || entry.skipWarning || null;
           entry.published = { ...entry.published };
-          for (const flag of ['igPosted', 'fbPosted', 'tiktokPosted', 'threadsPosted', 'xPosted']) {
+          for (const flag of ['igPosted', 'fbPosted', 'tiktokPosted', 'threadsPosted', 'xPosted', 'youtubePosted']) {
             entry.published[flag] = Boolean(entry.published[flag] || result[flag]);
           }
-          const publishedFlags = { instagram: 'igPosted', facebook: 'fbPosted', tiktok: 'tiktokPosted', threads: 'threadsPosted', x: 'xPosted' };
+          const publishedFlags = { instagram: 'igPosted', facebook: 'fbPosted', tiktok: 'tiktokPosted', threads: 'threadsPosted', x: 'xPosted', youtube: 'youtubePosted' };
           entry.skippedPlatforms = entry.skippedPlatforms.filter(platform => !entry.published[publishedFlags[platform]]);
           if (!entry.skippedPlatforms.length) entry.skipWarning = null;
-          entry.warning = [entry.skipWarning, result.threadsWarning].filter(Boolean).join(' ') || null;
+          entry.warning = [entry.skipWarning, result.threadsWarning, result.youtubeWarning].filter(Boolean).join(' ') || null;
+          if (result.youtubeScheduledAt) entry.youtubeScheduledAt = result.youtubeScheduledAt;
           if (result.partialFailure) {
             entry.status = 'partial';
             entry.error = result.error || 'Một nền tảng chưa đăng thành công';

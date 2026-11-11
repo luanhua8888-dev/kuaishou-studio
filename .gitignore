@@ -15,6 +15,7 @@ artifacts/
 *.zip
 
 # Auth & Credentials
+/client_secret_*.json
 /config/settings.json
 /config/x-client.json
 /config/credentials/
