@@ -5,8 +5,16 @@ import { exec } from 'child_process';
 import { renderWithCache } from './render-cache.js';
 import { removeDownloadDirectory } from './workspace.js';
 import { cleanPureText } from '../content/caption.js';
+import { pickTransitions } from './transitions.js';
+import { analyzeAudio } from './audio-analysis.js';
 
 const execPromise = util.promisify(exec);
+
+// Start the source music at its strongest part, so the first seconds already carry the hook.
+async function musicStart(audioPath, seconds) {
+  if (!audioPath || !fs.existsSync(audioPath)) return 0;
+  try { return (await analyzeAudio(audioPath, seconds)).start; } catch { return 0; }
+}
 
 /**
  * Format aesthetic mood quote text for TikTok video overlay (pure text only)
@@ -227,11 +235,11 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
     if (numImages === 1) {
       console.log('[Reel] Tạo video từ 1 hình ảnh chất lượng cao chuẩn HD 30fps...');
       const totalDur = audioDuration ? Math.min(Math.max(audioDuration, 6), 30) : 10;
+      const start = await musicStart(audioPath, totalDur);
       const audioInput = (audioPath && fs.existsSync(audioPath))
-        ? `-i "${audioPath}"`
+        ? `${start > 0 ? `-ss ${start} ` : ''}-i "${audioPath}"`
         : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
-      const vf = `fade=t=out:st=${(totalDur - 0.5).toFixed(2)}:d=0.5`;
-      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -vf "${vf}" -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
       await execPromise(cmd);
       return outputPath;
     }
@@ -239,7 +247,7 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
     let slideDuration = 3.15;
     if (audioDuration) {
       slideDuration = (audioDuration + (numImages - 1) * transitionDuration) / numImages;
-      slideDuration = Math.max(2.4, Math.min(5.0, slideDuration)) * 0.9;
+      slideDuration = Math.max(2.4, Math.min(3.2, slideDuration)) * 0.9;
     }
 
     const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration;
@@ -251,18 +259,20 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
     let lastOut = '0:v';
     let currentOffset = slideDuration - transitionDuration;
 
+    // No fade to black at the end: the last scene loops straight back to the first.
+    const transitions = pickTransitions(framedImages.length - 1, selectedImages.map(file => path.basename(file)).join('|'));
     for (let i = 1; i < framedImages.length; i++) {
       const nextOut = i === framedImages.length - 1 ? 'vxfade' : `v${i}`;
-      filterGraph += `[${lastOut}][${i}:v]xfade=transition=fade:duration=${transitionDuration.toFixed(2)}:offset=${currentOffset.toFixed(2)}[${nextOut}];`;
+      filterGraph += `[${lastOut}][${i}:v]xfade=transition=${transitions[i - 1]}:duration=${transitionDuration.toFixed(2)}:offset=${currentOffset.toFixed(2)}[${nextOut}];`;
       lastOut = nextOut;
       currentOffset += (slideDuration - transitionDuration);
     }
 
-    const fadeOutStart = Math.max(0, totalVideoDur - 0.6);
-    filterGraph += `[${lastOut}]fade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.6[vfinal]`;
+    filterGraph += `[${lastOut}]null[vfinal]`;
 
+    const start = await musicStart(audioPath, totalVideoDur);
     const audioInput = (audioPath && fs.existsSync(audioPath))
-      ? `-i "${audioPath}"`
+      ? `${start > 0 ? `-ss ${start} ` : ''}-i "${audioPath}"`
       : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
 
     const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length}:a -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;

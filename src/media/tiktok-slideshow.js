@@ -5,10 +5,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { renderWithCache } from './render-cache.js';
 import { generateAIStoryScenes } from '../content/ai-story.js';
+import { pickTransitions } from './transitions.js';
+import { analyzeAudio, snapScenesToBeats } from './audio-analysis.js';
 
 const run = promisify(execFile);
 const FPS = 30;
-const VERSION = 6;
+const VERSION = 8;
 const DEFAULT_STORY = [
   'Nếu được đi trốn một ngày, mình muốn đến đây.',
   'Giữa thiên nhiên, mọi thứ như chậm lại…',
@@ -317,13 +319,30 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
   const volume = number(config.audio?.volume, 1.0, 0, 1, 'audio.volume');
   const audioFade = Math.min(plan.duration / 2, number(config.audio?.fadeSeconds, 0.5, 0, 2, 'audio.fadeSeconds'));
   const hasAudio = Boolean(audioPath && fs.existsSync(audioPath));
+  const startAt = config.audio?.startAt ?? 'auto';
+  if (startAt !== 'auto') number(startAt, 0, 0, 600, 'audio.startAt');
+  const beatSync = config.beatSync ?? true;
+  if (typeof beatSync !== 'boolean') throw new Error('beatSync phải là true hoặc false');
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const outputDir = path.resolve(path.dirname(outputPath));
   const temp = fs.mkdtempSync(path.join(outputDir, '.tiktok-slideshow-'));
   try {
     return await renderWithCache(outputPath, [...selected, hasAudio ? audioPath : null, layout.font], { config, version: VERSION, texts }, async () => {
-      console.log(`[TikTok Slideshow] Dựng đồng thời ${plan.scenes.length} cảnh đa luồng…`);
-      const sceneTasks = plan.scenes.map(async scene => {
+      // Start the music at its strongest part and cut on its hits; fall back to the plain plan.
+      let audioStart = typeof startAt === 'number' ? startAt : 0;
+      let timeline = plan;
+      if (hasAudio && (startAt === 'auto' || beatSync)) {
+        try {
+          const analysis = await analyzeAudio(audioPath, plan.duration, startAt === 'auto' ? {} : { start: startAt });
+          audioStart = analysis.start;
+          if (beatSync) timeline = snapScenesToBeats(plan, analysis.onsets, FPS);
+          console.log(`[TikTok Slideshow] Nhạc bắt đầu từ ${audioStart}s, ${analysis.onsets.length} điểm nhấn, cắt theo nhịp: ${Boolean(timeline.beatSynced)}`);
+        } catch (error) {
+          console.warn(`[TikTok Slideshow] Không phân tích được nhạc, dựng theo nhịp đều: ${error.message}`);
+        }
+      }
+      console.log(`[TikTok Slideshow] Dựng đồng thời ${timeline.scenes.length} cảnh đa luồng…`);
+      const sceneTasks = timeline.scenes.map(async scene => {
         const frame = path.join(temp, `frame-${scene.index}.png`);
         // Only the decorative background is cropped; foreground fits inside motion margins.
         await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '0', '-i', selected[scene.index], '-filter_complex',
@@ -362,12 +381,13 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       const clips = renderedScenes.map(s => s.clip);
       const args = ['-hide_banner', '-loglevel', 'error', '-y'];
       for (const clip of clips) args.push('-i', clip);
-      args.push(...(hasAudio ? ['-stream_loop', '-1', '-i', audioPath] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']));
+      args.push(...(hasAudio ? ['-stream_loop', '-1', ...(audioStart > 0 ? ['-ss', String(audioStart)] : []), '-i', audioPath] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']));
       const filters = clips.map((_, i) => `[${i}:v]settb=1/30,setpts=PTS-STARTPTS,format=yuv420p[v${i}]`);
+      const transitions = pickTransitions(clips.length - 1, config.seed || config.title || outputPath, config.transitionStyle ?? 'mixed');
       let last = 'v0';
       for (let i = 1; i < clips.length; i++) {
         const next = `mix${i}`;
-        filters.push(`[${last}][v${i}]xfade=transition=fade:duration=${plan.transitionFrames / FPS}:offset=${plan.scenes[i].start / FPS}[${next}]`);
+        filters.push(`[${last}][v${i}]xfade=transition=${transitions[i - 1]}:duration=${plan.transitionFrames / FPS}:offset=${timeline.scenes[i].start / FPS}[${next}]`);
         last = next;
       }
       const textFilters = [];
@@ -376,17 +396,21 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         const lineHeight = Math.round(item.fontSize * 1.38);
         const height = item.text.split('\n').length * lineHeight + 32;
         const y = Math.round(layout.marginTop + layout.position * (1920 - layout.marginTop - layout.marginBottom - height));
-        const scene = plan.scenes[i];
+        const scene = timeline.scenes[i];
         // The caption changes at the midpoint of each dissolve, never two captions together.
         const begin = (scene.start + (i ? plan.transitionFrames / 2 : 0)) / FPS;
         let endIndex = i + 1;
         while (endIndex < texts.length && !texts[endIndex]) endIndex++;
-        const end = endIndex === texts.length ? plan.duration : (plan.scenes[endIndex].start + plan.transitionFrames / 2) / FPS;
+        const end = endIndex === texts.length ? plan.duration : (timeline.scenes[endIndex].start + plan.transitionFrames / 2) / FPS;
         const enable = `gte(t,${begin})*lt(t,${end})`;
         // Short fades soften scene changes while keeping most of each beat fully readable.
         const fade = Math.min(0.22, (end - begin) / 4);
-        const alpha = `min(1,min(max(0,(t-${begin})/${fade}),max(0,(${end}-t)/${fade})))`;
+        // The opening caption is fully visible on frame 0: the first frame is the hook and the cover.
+        const fadeIn = i === 0 ? '1' : `max(0,(t-${begin})/${fade})`;
+        const alpha = `min(1,min(${fadeIn},max(0,(${end}-t)/${fade})))`;
         const left = (1080 - layout.width) / 2;
+        // A short rise with ease-out reads as motion without moving or scaling the picture.
+        const lineY = base => i === 0 || layout.style === 'paper' ? String(base) : `${base}+18*pow(max(0,1-(t-${begin})/0.35),2)`;
         if (layout.style === 'editorial') {
           // A broad feathered scrim supports bright footage without outlining the letterforms.
           const top = y - 100;
@@ -407,7 +431,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
             : layout.style === 'bold'
             ? `fontcolor=${lineIndex === 0 ? '0xDFFF70' : 'white'}:borderw=0:box=1:boxcolor=0x101719@0.90:boxborderw=14:shadowx=0:shadowy=0:x=(w-text_w)/2`
             : `fontcolor=${layout.style === 'paper' ? '0x252C2A' : '0xFFF5E5'}:borderw=0:shadowcolor=black@${layout.style === 'paper' ? '0' : '0.35'}:shadowx=0:shadowy=2:x=${left}`;
-          textFilters.push(`drawtext=fontfile='${filterPath(layout.font)}':textfile='${filterPath(lineFile)}':expansion=none:fontsize=${item.fontSize}:alpha='${alpha}':${treatment}:y=${y + 16 + lineIndex * lineHeight}:enable='${enable}'`);
+          textFilters.push(`drawtext=fontfile='${filterPath(layout.font)}':textfile='${filterPath(lineFile)}':expansion=none:fontsize=${item.fontSize}:alpha='${alpha}':${treatment}:y='${lineY(y + 16 + lineIndex * lineHeight)}':enable='${enable}'`);
         });
         if (layout.style === 'diary' && config.sceneSubtitles?.[i]) {
           const subtitleFile = path.join(temp, `subtitle-${i}.txt`);
@@ -449,7 +473,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         outputPath
       );
       await run('ffmpeg', args, { maxBuffer: 8 * 1024 * 1024 });
-      fs.writeFileSync(`${outputPath}.story.json`, JSON.stringify({ ...plan, order, sourceImages: selected, captions: layout.layouts, config }, null, 2));
+      fs.writeFileSync(`${outputPath}.story.json`, JSON.stringify({ ...timeline, audioStart, order, sourceImages: selected, captions: layout.layouts, config }, null, 2));
     });
   } finally {
     // A unique renderer-owned directory, never source images or shared caches.

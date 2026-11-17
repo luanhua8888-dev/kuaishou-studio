@@ -2,6 +2,7 @@
   "durationSeconds": 14,
   "secondsPerImage": 2.6,
   "transitionSeconds": 0.3,
+  "transitionStyle": "mixed",
   "zoomAmount": 0,
   "text": {
     "style": "editorial",
@@ -12,5 +13,10 @@
     "marginTop": 180,
     "marginBottom": 420
   },
-  "audio": { "volume": 1.0, "fadeSeconds": 0.5 }
+  "audio": {
+    "volume": 1,
+    "fadeSeconds": 0.5,
+    "startAt": "auto"
+  },
+  "beatSync": true
 }
