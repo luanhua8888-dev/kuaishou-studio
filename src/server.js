@@ -1,34 +1,33 @@
-import { PROJECT_ROOT, SETTINGS_FILE, QUEUE_DIR, DOWNLOADS_DIR } from './paths.js';
+import { PROJECT_ROOT, SETTINGS_FILE, QUEUE_DIR } from './paths.js';
 import http from 'http';
-import { connectionStatus as xStatus, connectX, postToX, prepareXCaption, createXClient } from './platforms/x/poster.js';
-import { xOAuth } from './platforms/x/oauth.js';
-import { normalizeCaptionText, removeCaptionMentions, readJsonBody } from './content/caption-text.js';
-import { relevantHashtags, ensureCaptionHashtags } from './content/relevance-tags.js';
-import { buildThreadsCaption } from './content/threads-caption.js';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { Readable } from 'stream';
-import util from 'util';
-import { checkLoginStatus, interactiveLogin, postToInstagram } from './platforms/instagram/poster.js';
+import { connectionStatus as xStatus, connectX, postToX, prepareXCaption, createXClient } from './platforms/x/poster.js';
+import { xOAuth } from './platforms/x/oauth.js';
+import { removeCaptionMentions, readJsonBody } from './content/caption-text.js';
+import { relevantHashtags, ensureCaptionHashtags } from './content/relevance-tags.js';
+import { buildThreadsCaption } from './content/threads-caption.js';
+import { cleanPureText, translateText, generateCaptionAndHashtags } from './content/caption.js';
+import { checkLoginStatus, postToInstagram } from './platforms/instagram/poster.js';
 import { checkLoginStatus as checkTikTokStatus, postToTikTok } from './platforms/tiktok/poster.js';
 import { checkLoginStatus as checkThreadsStatus, startInteractiveLogin as loginThreads, loginState as threadsLoginState, postToThreads } from './platforms/threads/poster.js';
 import { createSheetQueue, SHEET_URL, readSettings } from './queue/sheet-queue.js';
 import { createGoogleSheet } from './queue/google-sheet.js';
 import { getPostPage, findPhotoData } from './kuaishou/page.js';
+import { extractUrl, extractMedia } from './kuaishou/extract-media.js';
 import { publishPlatforms } from './platforms/publish.js';
 import { requestPipeline } from './queue/pipeline-request.js';
-import { networkRead, mapLimit } from './network/network-read.js';
-import { downloadMediaFile, videoDownloadUrls } from './media/download.js';
-import { renderWithCache } from './media/render-cache.js';
+import { mapLimit } from './network/network-read.js';
+import { USER_AGENT, downloadFile, downloadImageAsJpg } from './media/kuaishou-download.js';
+import { removeDownloadDirectory, postOutputDir } from './media/workspace.js';
+import { createCinematicReel } from './media/cinematic-reel.js';
 import { createTikTokSlideshow, readTikTokSlideshowConfig } from './media/tiktok-slideshow.js';
 import { sanitizeVideoAudioForCopyright } from './media/anti-copyright.js';
 import { youtubeOAuth } from './platforms/youtube/oauth.js';
 import { postToYouTubeShort } from './platforms/youtube/poster.js';
 import { buildYouTubeMetadata } from './platforms/youtube/metadata.js';
-
-
-const execPromise = util.promisify(exec);
 
 const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7) || 3000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Cổng server không hợp lệ.');
@@ -36,8 +35,20 @@ const THREADS_ONLY = process.argv.includes('--threads-only');
 const X_ONLY = process.argv.includes('--x-only');
 const TIKTOK_ONLY = process.argv.includes('--tiktok-only');
 if ([X_ONLY, TIKTOK_ONLY, THREADS_ONLY].filter(Boolean).length > 1) throw new Error('Chỉ chọn một phiên nền tảng riêng.');
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
-const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
+const PLATFORM_FLAGS = ['autoPostIG', 'autoPostFB', 'autoPostThreads', 'autoPostTikTok', 'autoPostX', 'autoPostYouTube'];
+const SESSION_PLATFORM = X_ONLY ? 'autoPostX' : TIKTOK_ONLY ? 'autoPostTikTok' : null;
+
+// Single-platform sessions (X, TikTok) post only to their own platform.
+function applySessionMode(options = {}) {
+  if (!SESSION_PLATFORM) return options;
+  return { ...options, ...Object.fromEntries(PLATFORM_FLAGS.map(flag => [flag, flag === SESSION_PLATFORM])) };
+}
+
+function sendJson(res, status, body, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(body));
+}
+
 const pipelineProgress = new Map();
 const pipelineStageStarted = new Map();
 let sheetJobId = null;
@@ -50,7 +61,7 @@ const sheetQueue = createSheetQueue({
   async runPipeline(url, options) {
     const jobId = `sheet-${Date.now()}`;
     sheetJobId = jobId;
-    try { return await requestPipeline(PORT, { url, ...options, ...(X_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true, autoPostYouTube: false } : {}), ...(TIKTOK_ONLY ? { autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostYouTube: false, autoPostTikTok: true } : {}), jobId }); }
+    try { return await requestPipeline(PORT, { url, ...applySessionMode(options), jobId }); }
     finally { if (sheetJobId === jobId) sheetJobId = null; }
   }
 });
@@ -66,648 +77,25 @@ function setPipelineProgress(jobId, message) {
   }
 }
 
-function removeDownloadDirectory(target) {
-  const root = DOWNLOADS_DIR;
-  const resolved = path.resolve(target);
-  const relative = path.relative(root, resolved);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error('Đường dẫn dọn dẹp nằm ngoài downloads');
-  }
-  fs.rmSync(resolved, { recursive: true, force: true });
-}
 
-function sanitizeFileName(name) {
-  const normalized = (name || 'kuaishou').normalize('NFKD').replace(/[^\w\s-]/g, '').trim();
-  return (normalized || 'kuaishou').replace(/[\r\n\t]/g, ' ');
-}
-
-/**
- * Clean text to pure words only (strictly NO emojis, icons, gifs, decorative symbols)
- */
-function cleanPureText(str) {
-  if (!str) return '';
-  return normalizeCaptionText(str)
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, '')
-    .replace(/#[\w\u4e00-\u9fa5]+/g, '')
-    .replace(/https?:\/\/[^\s]+/g, '')
-    .replace(/BGM:.*$/i, '')
-    .replace(/[-_—=~*•★☆✦✧▲▼►◄\/\\]{2,}/g, ' ')
-    .replace(/^[“"']+|[”"']+$/g, '')
-    .replace(/[\r\n\t]+/g, ' ')
-    .trim();
-}
-
-/**
- * Format aesthetic mood quote text for TikTok video overlay (pure text only)
- */
-function formatMoodQuote(rawText, maxLineLen = 39, maxLines = 3) {
-  const clean = cleanPureText(rawText);
-  if (!clean) return '';
-
-  const words = clean.split(/\s+/);
-  const lines = [];
-  let currentLine = '';
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (testLine.length <= maxLineLen) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-      if (lines.length >= maxLines) {
-        currentLine = '';
-        break;
-      }
-    }
-  }
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-
-  // Keep the minimum line count, then balance the visible lines for a cleaner card.
-  if (lines.length > 1 && lines.join(' ').split(' ').length === words.length) {
-    const target = clean.length / lines.length;
-    const memo = new Map();
-    function balance(start, remaining) {
-      const key = `${start}:${remaining}`;
-      if (memo.has(key)) return memo.get(key);
-      if (!remaining) return start === words.length ? { cost: 0, lines: [] } : null;
-      let best = null;
-      for (let end = start + 1; end <= words.length - remaining + 1; end++) {
-        const line = words.slice(start, end).join(' ');
-        if (line.length > maxLineLen) break;
-        const rest = balance(end, remaining - 1);
-        if (!rest) continue;
-        const cost = (line.length - target) ** 2 + rest.cost;
-        if (!best || cost < best.cost) best = { cost, lines: [line, ...rest.lines] };
-      }
-      memo.set(key, best);
-      return best;
-    }
-    const balanced = balance(0, lines.length);
-    if (balanced) return balanced.lines.join('\n');
-  }
-  return lines.join('\n');
-}
-
-function roundedCaptionFilter(quoteText, fontPath, textPath) {
-  const lines = quoteText.split('\n');
-  const longest = Math.max(...lines.map(line => Array.from(line).length));
-  const width = Math.min(1000, Math.max(140, Math.ceil(longest * 16 + 40)));
-  const height = lines.length * 44 + 36;
-  const x = Math.round((1080 - width) / 2);
-  const y = Math.round((1920 - height) / 2 + 400);
-  function roundedBox(boxX, boxY, boxWidth, boxHeight, color) {
-    const slices = [
-      [20, 0, 4], [11, 4, 4], [6, 8, 4], [3, 12, 4], [1, 16, 4],
-      [0, 20, boxHeight - 40],
-      [1, boxHeight - 20, 4], [3, boxHeight - 16, 4],
-      [6, boxHeight - 12, 4], [11, boxHeight - 8, 4], [20, boxHeight - 4, 4]
-    ];
-    return slices.map(([inset, top, sliceHeight]) =>
-      `drawbox=x=${boxX + inset}:y=${boxY + top}:w=${boxWidth - inset * 2}:h=${sliceHeight}:color=${color}:t=fill`
-    ).join(',');
-  }
-  const shadow = roundedBox(x + 3, y + 8, width, height, 'black@0.10');
-  const rim = roundedBox(x, y, width, height, 'white@0.04');
-  const panel = roundedBox(x + 2, y + 2, width - 4, height - 4, '0x111925@0.52');
-  return `,${shadow},${rim},${panel},drawtext=fontfile='${fontPath}':textfile='${textPath}':fontcolor=white:expansion=none:fontsize=34:line_spacing=16:text_align=center:x=(w-text_w)/2:y=(h-text_h)/2+400:shadowcolor=black@0.45:shadowx=1:shadowy=2`;
-}
-
-function getImageDimensions(filePath) {
-  try {
-    const buf = fs.readFileSync(filePath);
-    if (buf[0] === 0xFF && buf[1] === 0xD8) {
-      let offset = 2;
-      while (offset < buf.length) {
-        if (buf[offset] !== 0xFF) break;
-        const marker = buf[offset + 1];
-        if (marker === 0xC0 || marker === 0xC2) {
-          const h = buf.readUInt16BE(offset + 5);
-          const w = buf.readUInt16BE(offset + 7);
-          return { width: w, height: h };
-        }
-        const len = buf.readUInt16BE(offset + 2);
-        offset += 2 + len;
-      }
-    } else if (buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a') {
-      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-    }
-  } catch {}
-  return null;
-}
-
-/**
- * Merge images and audio into a cinematic 9:16 vertical 1080x1920 video at 30 fps
- * with ambient blurred backdrop, full original image framing, silky-smooth crossfade transitions,
- * and optional pure text mood quote overlay (for TikTok only)
- */
-async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
-  const images = (Array.isArray(imageInput) ? imageInput : [imageInput]).filter(p => fs.existsSync(p)).slice(0, 10);
-  return renderWithCache(outputPath, [...images, audioPath && fs.existsSync(audioPath) ? audioPath : null],
-    { moodQuote, renderer: renderCinematicReel.toString() },
-    () => renderCinematicReel(images, audioPath, outputPath, moodQuote, frameCacheDir));
-}
-
-async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
-  const images = Array.isArray(imageInput) ? imageInput : [imageInput];
-  const validImages = images.filter(p => fs.existsSync(p));
-  if (validImages.length === 0) {
-    throw new Error('Không tìm thấy hình ảnh hợp lệ để tạo video');
-  }
-
-  // Determine audio duration if available
-  let audioDuration = null;
-  if (audioPath && fs.existsSync(audioPath)) {
-    try {
-      const { stdout } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`);
-      const dur = parseFloat(stdout.trim());
-      if (!isNaN(dur) && dur > 0) {
-        audioDuration = dur;
-      }
-    } catch {}
-  }
-
-  const tempDir = frameCacheDir || path.join(path.dirname(outputPath), 'temp_reel_' + Date.now());
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-
-  try {
-    // Take up to 10 images for optimal slideshow pacing
-    const selectedImages = validImages.slice(0, 10);
-    const numImages = selectedImages.length;
-
-    // Chuẩn bị filter chèn chữ tâm trạng tiếng Việt với font Monospaced và nền mờ tối dịu mắt
-    let quoteFilter = '';
-    if (moodQuote && moodQuote.trim()) {
-      const quoteText = formatMoodQuote(moodQuote);
-      if (quoteText) {
-        const quotePath = path.join(tempDir, 'mood_quote.txt');
-        fs.writeFileSync(quotePath, quoteText, 'utf-8');
-        const escapedQuotePath = quotePath.replace(/\\/g, '/').replace(/:/g, '\\:');
-
-        // A clean, semibold UI font supports Vietnamese without the monospaced look.
-        const captionFont = fs.existsSync('C:/Windows/Fonts/seguisb.ttf')
-          ? 'C\\:/Windows/Fonts/seguisb.ttf'
-          : fs.existsSync('C:/Windows/Fonts/CascadiaMono.ttf')
-          ? 'C\\:/Windows/Fonts/CascadiaMono.ttf'
-          : (fs.existsSync('C:/Windows/Fonts/consola.ttf') ? 'C\\:/Windows/Fonts/consola.ttf' : 'C\\:/Windows/Fonts/cour.ttf');
-
-        quoteFilter = roundedCaptionFilter(quoteText, captionFont, escapedQuotePath);
-      }
-    }
-
-    // Step 1: Pre-process each image into an ultra-sharp 1080x1920 9:16 frame
-    console.log(`[Reel] Xử lý ${numImages} hình ảnh chất lượng cao chuẩn khung hình 9:16...`);
-    const framedImages = new Array(numImages);
-    const prepareFrame = async (i) => {
-      const src = selectedImages[i];
-      const frameName = `frame_${String(i).padStart(2, '0')}.png`;
-      const basePath = path.join(tempDir, frameName);
-      const framedPath = quoteFilter ? path.join(tempDir, `quote_${frameName}`) : basePath;
-      if (fs.existsSync(framedPath)) {
-        framedImages[i] = framedPath;
-        return;
-      }
-      // A second platform can reuse the scaled and sharpened frame.
-      if (quoteFilter && fs.existsSync(basePath)) {
-        await execPromise(`ffmpeg -y -i "${basePath}" -vf "${quoteFilter.slice(1)}" -frames:v 1 "${framedPath}"`);
-        framedImages[i] = framedPath;
-        return;
-      }
-
-      let isFull9x16 = false;
-      const dims = getImageDimensions(src);
-      if (dims && dims.width && dims.height) {
-        isFull9x16 = (dims.height / dims.width) >= 1.70;
-      } else {
-        try {
-          const { stdout: dimsOutput } = await execPromise(`ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${src}"`);
-          const [w, h] = dimsOutput.trim().split(',').map(Number);
-          if (w && h) isFull9x16 = (h / w) >= 1.70;
-        } catch {}
-      }
-
-      let vf;
-      if (isFull9x16) {
-        // Ảnh dọc chuẩn 9:16: lấp đầy toàn màn hình không viền mờ, sắc nét tối đa
-        vf = `scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
-      } else {
-        // Ảnh 4:5, 3:4, vuông 1:1 hoặc ngang: giữ nguyên 100% độ nét và bố cục gốc (không zoom vỡ hạt, không cắt góc)
-        // Nền mờ đồng sắc phía sau + ảnh chính nguyên bản sắc nét ở trung tâm
-        vf = `split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,boxblur=25:5,eq=brightness=-0.12[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos[fg_fit];[bg_blur][fg_fit]overlay=(W-w)/2:(H-h)/2,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
-      }
-
-      await execPromise(`ffmpeg -y -threads 0 -i "${src}" -vf "${vf}" -frames:v 1 "${framedPath}"`);
-      framedImages[i] = framedPath;
-    };
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < numImages; i += BATCH_SIZE) {
-      const batch = [];
-      for (let j = i; j < Math.min(i + BATCH_SIZE, numImages); j++) batch.push(j);
-      await Promise.all(batch.map(prepareFrame));
-    }
-
-    // Step 2: Build video from framed images
-    const transitionDuration = 0.65; // slightly quicker, smooth crossfade in seconds
-
-    if (numImages === 1) {
-      console.log('[Reel] Tạo video từ 1 hình ảnh chất lượng cao chuẩn HD 30fps...');
-      const totalDur = audioDuration ? Math.min(Math.max(audioDuration, 6), 30) : 10;
-      const audioInput = (audioPath && fs.existsSync(audioPath))
-        ? `-i "${audioPath}"`
-        : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
-      const vf = `fade=t=out:st=${(totalDur - 0.5).toFixed(2)}:d=0.5`;
-      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -vf "${vf}" -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
-      await execPromise(cmd);
-      return outputPath;
-    }
-
-    let slideDuration = 3.15;
-    if (audioDuration) {
-      slideDuration = (audioDuration + (numImages - 1) * transitionDuration) / numImages;
-      slideDuration = Math.max(2.4, Math.min(5.0, slideDuration)) * 0.9;
-    }
-
-    const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration;
-    console.log(`[Reel] Tạo video chuyển cảnh mượt mà chuẩn 30fps (xfade ${transitionDuration}s, mỗi ảnh ${slideDuration.toFixed(2)}s, tổng ${totalVideoDur.toFixed(2)}s)...`);
-
-    const inputs = framedImages.map(f => `-framerate 30 -loop 1 -t ${slideDuration.toFixed(2)} -i "${f}"`).join(' ');
-
-    let filterGraph = '';
-    let lastOut = '0:v';
-    let currentOffset = slideDuration - transitionDuration;
-
-    for (let i = 1; i < framedImages.length; i++) {
-      const nextOut = i === framedImages.length - 1 ? 'vxfade' : `v${i}`;
-      filterGraph += `[${lastOut}][${i}:v]xfade=transition=fade:duration=${transitionDuration.toFixed(2)}:offset=${currentOffset.toFixed(2)}[${nextOut}];`;
-      lastOut = nextOut;
-      currentOffset += (slideDuration - transitionDuration);
-    }
-
-    const fadeOutStart = Math.max(0, totalVideoDur - 0.6);
-    filterGraph += `[${lastOut}]fade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.6[vfinal]`;
-
-    const audioInput = (audioPath && fs.existsSync(audioPath))
-      ? `-i "${audioPath}"`
-      : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
-
-    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length}:a -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
-    await execPromise(encodeCmd);
-
-    console.log('[Reel] Hoàn tất tạo video chất lượng cao!');
-    return outputPath;
-  } finally {
-    try {
-      if (!frameCacheDir && fs.existsSync(tempDir)) {
-        removeDownloadDirectory(tempDir);
-      }
-    } catch {}
-  }
-}
-
-function extractUrl(input) {
-  const match = (input || '').match(/https?:\/\/[^\s]+/);
-  return match ? match[0] : null;
-}
-
-/**
- * Helper to translate text using free Google Translate API endpoint
- */
-async function translateText(text, targetLang = 'vi', strict = false) {
-  text = normalizeCaptionText(text);
-  if (!text) return '';
-  try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw new Error('Translation request failed');
-    const data = await res.json();
-    if (Array.isArray(data) && Array.isArray(data[0])) {
-      const translated = normalizeCaptionText(data[0].map(s => s[0] || '').join(''));
-      if (translated) return translated;
-    }
-  } catch {}
-  if (strict) throw new Error('Không dịch được nội dung YouTube sang tiếng Anh; chưa đăng, hãy thử lại.');
-  return text;
-}
-
-/**
- * Generate viral Instagram caption and targeted hashtags in Vietnamese, English or Bilingual
- */
-async function generateCaptionAndHashtags(rawTitle, author, musicName = null, musicArtist = null, musicUrl = null, lang = 'en') {
-  let cleanTitle = removeCaptionMentions(normalizeCaptionText(rawTitle)).replace(/\r\n|\r|\n/g, ' ').trim();
-  cleanTitle = cleanTitle.replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s+/g, ' ').trim();
-
-  let titleLine = cleanTitle || (lang === 'en' ? 'Peaceful moments' : 'Khoảnh khắc bình yên');
-  if (cleanTitle) {
-    if (lang === 'vi') {
-      const vi = await translateText(cleanTitle, 'vi');
-      titleLine = vi || 'Khoảnh khắc bình yên';
-    } else if (lang === 'en') {
-      const en = await translateText(cleanTitle, 'en');
-      titleLine = en || 'Peaceful moments';
-    } else if (lang === 'both') {
-      const [vi, en] = await Promise.all([translateText(cleanTitle, 'vi'), translateText(cleanTitle, 'en')]);
-      if (vi && en && vi !== en) {
-        titleLine = `${vi}\n   "${en}"`;
-      } else {
-        titleLine = vi || en || 'Peaceful moments';
-      }
-    }
-  }
-
-  let caption = `${titleLine}\n\n`;
-
-  const hashtags = relevantHashtags(`${removeCaptionMentions(rawTitle)} ${titleLine}`, lang);
-  const fullText = hashtags ? `${caption}${hashtags}` : caption.trim();
-
-  // Tạo câu chữ tâm trạng tiếng Việt chuẩn (chỉ chữ thuần túy, không icon/emoji/gif) dành riêng cho video TikTok
-  let moodQuoteVi = '';
-  if (cleanTitle) {
-    const vi = await translateText(cleanTitle, 'vi');
-    moodQuoteVi = cleanPureText(vi || cleanTitle);
-  }
-  if (!moodQuoteVi || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(moodQuoteVi)) {
-    moodQuoteVi = 'Khoảnh khắc bình yên';
-  }
-
-  return {
-    caption,
-    hashtags,
-    fullText,
-    moodQuoteVi,
-    moodQuote: moodQuoteVi
-  };
-}
-
-function extractMedia(postData, html = '') {
-  const photo = postData.photo || {};
-  const images = [];
-  let videoUrl = null;
-
-  // 1. Detect video URLs from various Kuaishou photo fields
-  if (photo.mainMvUrls && Array.isArray(photo.mainMvUrls) && photo.mainMvUrls.length > 0) {
-    const item = photo.mainMvUrls[0];
-    videoUrl = typeof item === 'string' ? item : (item?.url || null);
-  } else if (typeof photo.mainMvUrls === 'string') {
-    videoUrl = photo.mainMvUrls;
-  }
-
-  if (!videoUrl && photo.srcNoMark) {
-    videoUrl = photo.srcNoMark;
-  }
-
-  if (!videoUrl && photo.videoUrl) {
-    videoUrl = photo.videoUrl;
-  }
-
-  if (!videoUrl && photo.playUrl) {
-    videoUrl = photo.playUrl;
-  }
-
-  if (!videoUrl && Array.isArray(photo.playUrls) && photo.playUrls.length > 0) {
-    const item = photo.playUrls[0];
-    videoUrl = typeof item === 'string' ? item : (item?.url || null);
-  }
-
-  if (!videoUrl && photo.photoUrl && (
-    photo.photoType === 'VIDEO' ||
-    photo.photoType === 'MV' ||
-    photo.photoType === 'VERTICAL' ||
-    photo.photoUrl.includes('.mp4') ||
-    photo.photoUrl.includes('mov')
-  )) {
-    videoUrl = photo.photoUrl;
-  }
-
-  if (!videoUrl && photo.manifest) {
-    try {
-      const manifest = typeof photo.manifest === 'string' ? JSON.parse(photo.manifest) : photo.manifest;
-      if (manifest?.adaptationSet) {
-        for (const set of manifest.adaptationSet) {
-          if (set.representation && set.representation.length > 0) {
-            const rep = set.representation[0];
-            if (rep.url) {
-              videoUrl = rep.url;
-              break;
-            }
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // Fallback: search in HTML for mp4 link
-  if (!videoUrl && html) {
-    const mp4Match = html.match(/https?:\/\/[a-zA-Z0-9_\-\.]+(?:yximgs\.com|kwimgs\.com|kwaicdn\.com|kuaishou\.com)[^"'\s<>\\]+\.mp4[^"'\s<>\\]*/i);
-    if (mp4Match) {
-      videoUrl = mp4Match[0];
-    }
-  }
-
-  // 2. Multi-image atlas
-  const atlas = photo.atlas || (photo.ext_params && photo.ext_params.atlas);
-  const isAtlas = Boolean(atlas && Array.isArray(atlas.list) && atlas.list.length > 0);
-
-  if (isAtlas) {
-    const cdnList = (atlas.cdnList && atlas.cdnList.length > 0)
-      ? atlas.cdnList.map(c => (typeof c === 'string' ? c : c.cdn || 'p2.a.yximgs.com'))
-      : ['p2.a.yximgs.com', 'p23.a.yximgs.com'];
-
-    const defaultCdn = cdnList[0] || 'p2.a.yximgs.com';
-
-    for (let i = 0; i < atlas.list.length; i++) {
-      let item = atlas.list[i];
-      if (typeof item === 'string') {
-        if (item.startsWith('http')) {
-          images.push(item);
-        } else {
-          const path = item.startsWith('/') ? item : `/${item}`;
-          images.push(`https://${defaultCdn}${path}`);
-        }
-      } else if (item && item.url) {
-        images.push(item.url);
-      }
-    }
-  }
-
-  // 3. Single image / cover
-  let coverUrl = null;
-  if (photo.coverUrls && photo.coverUrls.length > 0) {
-    const best = photo.coverUrls[0];
-    coverUrl = typeof best === 'string' ? best : best?.url;
-  } else if (photo.coverUrl) {
-    coverUrl = typeof photo.coverUrl === 'string' ? photo.coverUrl : photo.coverUrl?.url;
-  }
-
-  if (!isAtlas && !videoUrl && images.length === 0) {
-    if (coverUrl) images.push(coverUrl);
-    if (images.length === 0 && photo.ext_params?.single?.imageUrl) {
-      images.push(photo.ext_params.single.imageUrl);
-    }
-  }
-
-  // If native video, also add coverUrl into images so thumbnail is present
-  if (videoUrl && !isAtlas && coverUrl && images.length === 0) {
-    images.push(coverUrl);
-  }
-
-  const isVideo = Boolean(videoUrl && (!isAtlas || photo.photoType === 'VIDEO' || photo.photoType === 'MV' || photo.photoType === 'VERTICAL'));
-
-  let musicUrl = null;
-  let musicName = null;
-  let musicArtist = null;
-
-  // 1. Check soundTrack (standard for Kuaishou photos & videos)
-  if (photo.soundTrack) {
-    musicName = photo.soundTrack.name || null;
-    musicArtist = photo.soundTrack.artist || null;
-    if (Array.isArray(photo.soundTrack.audioUrls) && photo.soundTrack.audioUrls.length > 0) {
-      const first = photo.soundTrack.audioUrls[0];
-      musicUrl = typeof first === 'string' ? first : (first?.url || null);
-    } else if (photo.soundTrack.audioUrl) {
-      musicUrl = photo.soundTrack.audioUrl;
-    }
-  }
-
-  // 2. Check photo.music
-  if (!musicUrl && photo.music) {
-    musicName = musicName || photo.music.name || null;
-    musicArtist = musicArtist || photo.music.artist || null;
-    if (Array.isArray(photo.music.audioUrls) && photo.music.audioUrls.length > 0) {
-      const first = photo.music.audioUrls[0];
-      musicUrl = typeof first === 'string' ? first : (first?.url || null);
-    } else {
-      musicUrl = photo.music.url || photo.music.playUrl || null;
-    }
-  }
-
-  // 3. Check single / atlas ext_params
-  if (!musicUrl && photo.ext_params?.single?.music) {
-    const musicCdn = photo.ext_params.single.musicCdnList?.[0]?.cdn || 'tymov2.a.kwimgs.com';
-    const musicPath = photo.ext_params.single.music;
-    musicUrl = `https://${musicCdn}${musicPath.startsWith('/') ? musicPath : '/' + musicPath}`;
-    musicName = musicName || 'BGM';
-  }
-
-  if (!musicUrl && (photo.atlas?.music || photo.ext_params?.atlas?.music)) {
-    const musicPath = photo.atlas?.music || photo.ext_params?.atlas?.music;
-    const cdn = photo.atlas?.cdnList?.[0] || 'p2.a.yximgs.com';
-    musicUrl = `https://${cdn}${musicPath.startsWith('/') ? musicPath : '/' + musicPath}`;
-  }
-
-  // 4. Fallback search in HTML
-  if (!musicUrl && html) {
-    const audioMatch = html.match(/https?:\/\/[a-zA-Z0-9_\-\.]+(?:yximgs\.com|kwimgs\.com|kwaicdn\.com)[^"'<>\s]+\.(?:m4a|mp3|aac)[^"'<>\s]*/i);
-    if (audioMatch) {
-      musicUrl = audioMatch[0];
-    }
-  }
-
-  const avatar = photo.headUrl || photo.headUrls?.[0]?.url || null;
-
-  return {
-    title: photo.caption || `kuaishou_${photo.photoId || Date.now()}`,
-    author: photo.userName || 'unknown_author',
-    authorAvatar: avatar,
-    photoId: photo.photoId || '',
-    images,
-    isVideo,
-    videoUrl: isVideo ? videoUrl : null,
-    videoUrls: isVideo ? videoDownloadUrls(photo, videoUrl) : [],
-    coverUrl,
-    musicUrl,
-    musicName,
-    musicArtist
-  };
-}
-
-function extractImages(postData, html = '') {
-  return extractMedia(postData, html);
-}
-
-async function downloadFile(url, destPath, onProgress) {
-  await downloadMediaFile(url, destPath, {
-    onProgress,
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Referer': 'https://www.kuaishou.com/'
-    }
-  });
-}
-
-async function downloadImageAsJpg(url, destJpgPath) {
-  if (fs.existsSync(destJpgPath)) return destJpgPath;
-
-  // 1. Thử tải trực tiếp file JPG gốc từ CDN Kuaishou (tránh bị nén WebP 2 lần)
-  if (url.includes('.webp')) {
-    const directJpgUrl = url.replace(/\.webp(\?.*)?$/i, '.jpg$1');
-    try {
-      const jpgRes = await networkRead(directJpgUrl, {
-        format: 'buffer', timeoutMs: 10000, attempts: 1,
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Referer': 'https://www.kuaishou.com/'
-        }
-      });
-      if (jpgRes.contentType.includes('image')) {
-        if (jpgRes.data.byteLength > 1000) {
-          fs.writeFileSync(destJpgPath, jpgRes.data);
-          return destJpgPath;
-        }
-      }
-    } catch {}
-  }
-
-  // 2. Tải từ URL gốc
-  const { data: buffer } = await networkRead(url, {
-    format: 'buffer',
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Referer': 'https://www.kuaishou.com/'
-    }
-  });
-
-  // Check if buffer is WEBP (starts with 'RIFF' and bytes 8..11 are 'WEBP')
-  const isWebp = buffer.length > 12 && buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
-
-  if (isWebp) {
-    const tempWebp = destJpgPath + '.temp.webp';
-    fs.writeFileSync(tempWebp, buffer);
-    try {
-      await execPromise(`ffmpeg -y -i "${tempWebp}" -qscale:v 1 -qmin 1 -pix_fmt yuvj420p -color_range pc -update 1 -frames:v 1 "${destJpgPath}"`);
-    } finally {
-      try { fs.unlinkSync(tempWebp); } catch {}
-    }
-  } else {
-    fs.writeFileSync(destJpgPath, buffer);
-  }
-
-  return destJpgPath;
-}
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host}`);
   if (TIKTOK_ONLY && ['/api/ig/post', '/api/fb/post', '/api/threads/post', '/api/x/post'].includes(reqUrl.pathname)) {
-    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: false, error: 'Phiên này chỉ đăng TikTok.' }));
+    sendJson(res, 409, { success: false, error: 'Phiên này chỉ đăng TikTok.' });
     return;
   }
   if (THREADS_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post', '/api/x/post'].includes(reqUrl.pathname)) {
-    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: false, error: 'Cửa sổ này chỉ đăng Threads. Dùng ứng dụng chính cho nền tảng khác.' }));
+    sendJson(res, 409, { success: false, error: 'Cửa sổ này chỉ đăng Threads. Dùng ứng dụng chính cho nền tảng khác.' });
     return;
   }
 
   if (X_ONLY && ['/api/ig/post', '/api/fb/post', '/api/tiktok/post', '/api/threads/post'].includes(reqUrl.pathname)) {
-    res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: false, error: 'Phiên này chỉ đăng X.' }));
+    sendJson(res, 409, { success: false, error: 'Phiên này chỉ đăng X.' });
     return;
   }
   if (reqUrl.pathname === '/api/youtube/status' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify(youtubeOAuth.status()));
+    sendJson(res, 200, youtubeOAuth.status(), { 'Cache-Control': 'no-store' });
     return;
   }
   if (reqUrl.pathname === '/api/youtube/oauth/start' && req.method === 'GET') {
@@ -759,8 +147,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (reqUrl.pathname === '/api/x/status' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ success: true, ...xStatus() }));
+    sendJson(res, 200, { success: true, ...xStatus() }, { 'Cache-Control': 'no-store' });
     return;
   }
   if (reqUrl.pathname === '/api/x/login' && req.method === 'POST') {
@@ -772,11 +159,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const { accessToken } = await readJsonBody(req);
       const result = await connectX(accessToken);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(result));
+      sendJson(res, 200, result);
     } catch (error) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: error.message }));
+      sendJson(res, 400, { success: false, error: error.message });
     }
     return;
   }
@@ -807,29 +192,25 @@ const server = http.createServer(async (req, res) => {
       const { url, lang = 'en' } = await readJsonBody(req);
       const cleanUrl = extractUrl(url);
       if (!cleanUrl) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không tìm thấy link Kuaishou hợp lệ' }));
+        sendJson(res, 400, { success: false, error: 'Không tìm thấy link Kuaishou hợp lệ' });
         return;
       }
 
       const { finalUrl, html, initState } = await getPostPage(cleanUrl);
       if (!initState) {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không tìm thấy dữ liệu bài đăng (có thể link bị khóa hoặc hết hạn)' }));
+        sendJson(res, 404, { success: false, error: 'Không tìm thấy dữ liệu bài đăng (có thể link bị khóa hoặc hết hạn)' });
         return;
       }
 
       const postContainer = findPhotoData(initState);
       if (!postContainer || !postContainer.photo) {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Bài viết không có thông tin hình ảnh' }));
+        sendJson(res, 404, { success: false, error: 'Bài viết không có thông tin hình ảnh' });
         return;
       }
 
       const data = extractMedia(postContainer, html);
       const generated = await generateCaptionAndHashtags(data.title, data.author, data.musicName, data.musicArtist, data.musicUrl, lang);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ 
+      sendJson(res, 200, { 
         success: true, 
         ...data, 
         generatedCaption: generated.fullText,
@@ -838,10 +219,9 @@ const server = http.createServer(async (req, res) => {
         moodQuoteVi: generated.moodQuoteVi,
         originalUrl: cleanUrl, 
         finalUrl 
-      }));
+      });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
@@ -851,11 +231,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const { title, author, musicName, musicArtist, musicUrl, lang = 'vi' } = await readJsonBody(req);
       const generated = await generateCaptionAndHashtags(title, author, musicName, musicArtist, musicUrl, lang);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, ...generated }));
+      sendJson(res, 200, { success: true, ...generated });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
@@ -865,16 +243,11 @@ const server = http.createServer(async (req, res) => {
     try {
       const { post } = await readJsonBody(req);
       if (!post) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không có dữ liệu bài viết để tải' }));
+        sendJson(res, 400, { success: false, error: 'Không có dữ liệu bài viết để tải' });
         return;
       }
 
-      const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(DOWNLOADS_DIR, folderName);
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+      const outputDir = postOutputDir(post);
 
       // Save info
       fs.writeFileSync(
@@ -901,16 +274,14 @@ const server = http.createServer(async (req, res) => {
         } catch {}
       }
 
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ 
+      sendJson(res, 200, { 
         success: true, 
         isVideo: Boolean(post.isVideo),
         count: post.isVideo ? 1 : (post.images ? post.images.length : 0), 
         path: outputDir 
-      }));
+      });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
@@ -922,11 +293,9 @@ const server = http.createServer(async (req, res) => {
       if (folder && fs.existsSync(folder)) {
         exec(`explorer.exe "${folder}"`);
       }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true }));
+      sendJson(res, 200, { success: true });
     } catch {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false }));
+      sendJson(res, 500, { success: false });
     }
     return;
   }
@@ -988,11 +357,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && reqUrl.pathname === '/api/ig/status') {
     try {
       const loggedIn = await checkLoginStatus();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, loggedIn }));
+      sendJson(res, 200, { success: true, loggedIn });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message, loggedIn: false }));
+      sendJson(res, 500, { success: false, error: err.message, loggedIn: false });
     }
     return;
   }
@@ -1002,29 +369,24 @@ const server = http.createServer(async (req, res) => {
     try {
       const batPath = path.join(PROJECT_ROOT, 'scripts', 'windows', 'login-instagram.bat');
       exec(`start "" "${batPath}"`);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: 'Đang mở cửa sổ đăng nhập Instagram' }));
+      sendJson(res, 200, { success: true, message: 'Đang mở cửa sổ đăng nhập Instagram' });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
 
   if (req.method === 'GET' && reqUrl.pathname === '/api/threads/status') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, loggedIn: await checkThreadsStatus(), ...threadsLoginState() }));
+    sendJson(res, 200, { success: true, loggedIn: await checkThreadsStatus(), ...threadsLoginState() });
     return;
   }
 
   if (req.method === 'POST' && reqUrl.pathname === '/api/threads/login') {
     try {
       const { alreadyOpen } = await loginThreads();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: alreadyOpen ? 'Cửa sổ đăng nhập Threads đang mở.' : 'Đã mở cửa sổ đăng nhập Threads.' }));
+      sendJson(res, 200, { success: true, message: alreadyOpen ? 'Cửa sổ đăng nhập Threads đang mở.' : 'Đã mở cửa sổ đăng nhập Threads.' });
     } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: `Không mở được đăng nhập Threads: ${error.message}` }));
+      sendJson(res, 500, { success: false, error: `Không mở được đăng nhập Threads: ${error.message}` });
     }
     return;
   }
@@ -1039,17 +401,12 @@ const server = http.createServer(async (req, res) => {
       const doShareFB = isFbOnly || Boolean(shareToFacebook);
 
       if (!post || (!post.isVideo && (!Array.isArray(post.images) || post.images.length === 0))) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không có dữ liệu bài viết để đăng' }));
+        sendJson(res, 400, { success: false, error: 'Không có dữ liệu bài viết để đăng' });
         return;
       }
 
       // Download files locally first to ensure paths
-      const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(DOWNLOADS_DIR, folderName);
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+      const outputDir = postOutputDir(post);
 
       let uploadPaths = [];
 
@@ -1094,14 +451,12 @@ const server = http.createServer(async (req, res) => {
       const captionText = ensureCaptionHashtags(removeCaptionMentions(rawCaption), captionLang, post.title);
       if (isXOnly) {
         const result = await postToX({ imagePaths: uploadPaths, caption: prepareXCaption(captionText, { truncate: !customCaption?.trim() }) });
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(result));
+        sendJson(res, 200, result);
         return;
       }
       if (isThreadsOnly) {
         const result = await postToThreads({ imagePaths: uploadPaths, caption: buildThreadsCaption(captionText, 'en', { prompt: false }) });
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(result));
+        sendJson(res, 200, result);
         return;
       }
       const igPostResult = await postToInstagram({
@@ -1115,11 +470,9 @@ const server = http.createServer(async (req, res) => {
         ? 'Đã đăng bài thành công lên Instagram & chia sẻ sang Facebook!' 
         : 'Đã đăng bài thành công lên Instagram!';
 
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: igPostResult.success, message: successMsg }));
+      sendJson(res, 200, { success: igPostResult.success, message: successMsg });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
@@ -1128,11 +481,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && reqUrl.pathname === '/api/tiktok/status') {
     try {
       const loggedIn = await checkTikTokStatus();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, loggedIn }));
+      sendJson(res, 200, { success: true, loggedIn });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message, loggedIn: false }));
+      sendJson(res, 500, { success: false, error: err.message, loggedIn: false });
     }
     return;
   }
@@ -1142,11 +493,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const batPath = path.join(PROJECT_ROOT, 'scripts', 'windows', 'login-tiktok.bat');
       exec(`start "" "${batPath}"`);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: 'Đang mở cửa sổ đăng nhập TikTok' }));
+      sendJson(res, 200, { success: true, message: 'Đang mở cửa sổ đăng nhập TikTok' });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
@@ -1156,16 +505,11 @@ const server = http.createServer(async (req, res) => {
     try {
       const { post, customCaption, slideshowConfig } = await readJsonBody(req);
       if (!post) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không có dữ liệu bài viết để đăng TikTok' }));
+        sendJson(res, 400, { success: false, error: 'Không có dữ liệu bài viết để đăng TikTok' });
         return;
       }
 
-      const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(DOWNLOADS_DIR, folderName);
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+      const outputDir = postOutputDir(post);
 
       let targetVideo = null;
 
@@ -1204,8 +548,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (!targetVideo) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Chưa có file video nào được tạo để đăng lên TikTok' }));
+        sendJson(res, 400, { success: false, error: 'Chưa có file video nào được tạo để đăng lên TikTok' });
         return;
       }
 
@@ -1225,19 +568,16 @@ const server = http.createServer(async (req, res) => {
         headless: true
       });
 
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, message: 'Đã đăng video thành công lên TikTok!' }));
+      sendJson(res, 200, { success: true, message: 'Đã đăng video thành công lên TikTok!' });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
+      sendJson(res, 500, { success: false, error: err.message });
     }
     return;
   }
 
   // 9. API: 1-Click Run Pipeline (Tải nội dung + Tự động tạo Caption & Hashtag + Tự động đăng IG/TikTok/Facebook)
   if (req.method === 'GET' && reqUrl.pathname === '/api/progress') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ message: pipelineProgress.get(reqUrl.searchParams.get('jobId')) || '' }));
+    sendJson(res, 200, { message: pipelineProgress.get(reqUrl.searchParams.get('jobId')) || '' }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -1261,11 +601,9 @@ const server = http.createServer(async (req, res) => {
         const cells = await googleSheet.readColumn(settings);
         rows = cells.map((value, index) => ({ row: index + 1, value: String(value), colA: String(value), colB: '', colC: false, links: {} })).filter(item => item.value.trim());
       }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ rows }));
+      sendJson(res, 200, { rows }, { 'Cache-Control': 'no-store' });
     } catch (error) {
-      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: error.message }));
+      sendJson(res, 502, { error: error.message });
     }
     return;
   }
@@ -1280,8 +618,7 @@ const server = http.createServer(async (req, res) => {
           geminiApiKey = s.geminiApiKey || s.aiApiKey || '';
         }
       } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ geminiApiKey, hasKey: Boolean(geminiApiKey) }));
+      sendJson(res, 200, { geminiApiKey, hasKey: Boolean(geminiApiKey) }, { 'Cache-Control': 'no-store' });
       return;
     }
     if (req.method === 'POST') {
@@ -1294,11 +631,9 @@ const server = http.createServer(async (req, res) => {
         settings.geminiApiKey = String(body.geminiApiKey || '').trim();
         fs.mkdirSync(path.dirname(settingPath), { recursive: true });
         fs.writeFileSync(settingPath, JSON.stringify(settings, null, 2), 'utf8');
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: true, hasKey: Boolean(settings.geminiApiKey) }));
+        sendJson(res, 200, { success: true, hasKey: Boolean(settings.geminiApiKey) });
       } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: err.message }));
+        sendJson(res, 500, { success: false, error: err.message });
       }
       return;
     }
@@ -1319,23 +654,19 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') result = sheetQueue.snapshot();
       else if (req.method === 'POST') {
         const payload = await readJsonBody(req);
-        if (TIKTOK_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostYouTube: false, autoPostTikTok: true };
-        if (X_ONLY) payload.options = { ...payload.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true, autoPostYouTube: false };
+        if (SESSION_PLATFORM) payload.options = applySessionMode(payload.options);
         if (TIKTOK_ONLY && payload.enabled === true && !payload.runNextNow && !payload.restartFromFirst) payload.runNow = false;
         result = sheetQueue.configure(payload);
       }
       else { res.writeHead(405); res.end(); return; }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ ...result, sheetUrl: SHEET_URL,
+      sendJson(res, 200, { ...result, sheetUrl: SHEET_URL,
         tiktokOnly: TIKTOK_ONLY, xOnly: X_ONLY,
-        ...(X_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostTikTok: false, autoPostX: true, autoPostYouTube: false } } : {}),
-        ...(TIKTOK_ONLY ? { options: { ...result.options, autoPostIG: false, autoPostFB: false, autoPostThreads: false, autoPostX: false, autoPostYouTube: false, autoPostTikTok: true } } : {}),
+        ...(SESSION_PLATFORM ? { options: applySessionMode(result.options) } : {}),
         stage: sheetJobId ? pipelineProgress.get(sheetJobId) || null : null,
         stageStartedAt: sheetJobId ? pipelineStageStarted.get(sheetJobId) || null : null,
-      }));
+      }, { 'Cache-Control': 'no-store' });
     } catch (error) {
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: error.message }));
+      sendJson(res, 400, { error: error.message });
     }
     return;
   }
@@ -1345,31 +676,27 @@ const server = http.createServer(async (req, res) => {
     let publishingStarted = false;
     try {
       let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), autoPostX = false, autoPostYouTube = false, asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
-      if (TIKTOK_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostX = false; autoPostYouTube = false; autoPostTikTok = true; }
-      if (X_ONLY) { autoPostIG = false; autoPostFB = false; autoPostThreads = false; autoPostTikTok = false; autoPostX = true; autoPostYouTube = false; }
+      if (SESSION_PLATFORM) ({ autoPostIG, autoPostFB, autoPostThreads, autoPostTikTok, autoPostX, autoPostYouTube } = applySessionMode());
       if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB || autoPostX)) throw new Error('Phiên này chỉ đăng Threads.');
       const tikTokConfig = autoPostTikTok ? readTikTokSlideshowConfig(slideshowConfig) : null;
       jobId = requestJobId;
       setPipelineProgress(jobId, 'Đang đọc nội dung Kuaishou…');
       const cleanUrl = extractUrl(url);
       if (!cleanUrl) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không tìm thấy link Kuaishou hợp lệ' }));
+        sendJson(res, 400, { success: false, error: 'Không tìm thấy link Kuaishou hợp lệ' });
         return;
       }
 
       // Step 1: Extract post
       const { finalUrl, html, initState } = await getPostPage(cleanUrl);
       if (!initState) {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Không tìm thấy dữ liệu bài đăng' }));
+        sendJson(res, 404, { success: false, error: 'Không tìm thấy dữ liệu bài đăng' });
         return;
       }
 
       const postContainer = findPhotoData(initState);
       if (!postContainer || !postContainer.photo) {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Bài viết không có nội dung' }));
+        sendJson(res, 404, { success: false, error: 'Bài viết không có nội dung' });
         return;
       }
 
@@ -1394,11 +721,7 @@ const server = http.createServer(async (req, res) => {
 
       // Step 2: Download media locally
       setPipelineProgress(jobId, 'Đang tải ảnh và nhạc…');
-      const folderName = sanitizeFileName(`${post.author}_${post.photoId || Date.now()}`).slice(0, 50);
-      const outputDir = path.join(DOWNLOADS_DIR, folderName);
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+      const outputDir = postOutputDir(post);
 
       fs.writeFileSync(
         path.join(outputDir, 'info.txt'),
@@ -1559,8 +882,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       setPipelineProgress(jobId, 'Hoàn tất.');
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({
+      sendJson(res, 200, {
         success: true,
         post: { ...post, originalUrl: cleanUrl, finalUrl, moodQuote: finalMoodQuoteVi, moodQuoteVi: finalMoodQuoteVi },
         caption: finalCaption,
@@ -1572,11 +894,10 @@ const server = http.createServer(async (req, res) => {
         isVideo: post.isVideo,
         count: post.isVideo ? 1 : post.images.length,
         ...published
-      }));
+      });
     } catch (err) {
       setPipelineProgress(jobId, `Lỗi: ${err.message}`);
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, error: err.message, code: err.code, failureStage: publishingStarted ? 'publish' : 'prepare' }));
+      sendJson(res, 500, { success: false, error: err.message, code: err.code, failureStage: publishingStarted ? 'publish' : 'prepare' });
     } finally {
       if (typeof jobId === 'string') {
         const completedJobId = jobId;

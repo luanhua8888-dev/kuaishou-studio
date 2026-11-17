@@ -8,7 +8,12 @@ import { sanitizeVideoAudioForCopyright } from '../../src/media/anti-copyright.j
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
-test('sanitizeVideoAudioForCopyright creates safe video with pitch shifted audio', async () => {
+// These tests render real media, so they need FFmpeg on PATH.
+let hasFfmpeg = true;
+try { execSync('ffmpeg -version', { stdio: 'ignore' }); } catch { hasFfmpeg = false; }
+const ffmpegTest = (name, fn) => test(name, { skip: !hasFfmpeg && 'ffmpeg not found on PATH' }, fn);
+
+ffmpegTest('sanitizeVideoAudioForCopyright creates safe video with pitch shifted audio', async () => {
   const testInput = path.join(root, 'test_anti_copy_input.mp4');
   const expectedSafe = path.join(root, 'test_anti_copy_input_safe.mp4');
 
@@ -31,7 +36,7 @@ test('sanitizeVideoAudioForCopyright creates safe video with pitch shifted audio
   }
 });
 
-test('sanitizeVideoAudioForCopyright handles video without audio gracefully', async () => {
+ffmpegTest('sanitizeVideoAudioForCopyright handles video without audio gracefully', async () => {
   const testNoAudio = path.join(root, 'test_no_audio.mp4');
 
   try {
