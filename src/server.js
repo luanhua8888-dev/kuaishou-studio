@@ -10,6 +10,7 @@ import { removeCaptionMentions, readJsonBody } from './content/caption-text.js';
 import { relevantHashtags, ensureCaptionHashtags } from './content/relevance-tags.js';
 import { buildThreadsCaption } from './content/threads-caption.js';
 import { cleanPureText, translateText, generateCaptionAndHashtags } from './content/caption.js';
+import { callToAction, withCallToAction } from './content/call-to-action.js';
 import { checkLoginStatus, postToInstagram } from './platforms/instagram/poster.js';
 import { checkLoginStatus as checkTikTokStatus, postToTikTok } from './platforms/tiktok/poster.js';
 import { checkLoginStatus as checkThreadsStatus, startInteractiveLogin as loginThreads, loginState as threadsLoginState, postToThreads } from './platforms/threads/poster.js';
@@ -560,7 +561,7 @@ const server = http.createServer(async (req, res) => {
         captionText = removeCaptionMentions(slideshowCaption);
       } else {
         const generatedVi = await generateCaptionAndHashtags(post.title, post.author, post.musicName, post.musicArtist, post.musicUrl, 'vi');
-        captionText = generatedVi.fullText;
+        captionText = withCallToAction(generatedVi.fullText, callToAction('tiktok', 'vi'));
       }
       await postToTikTok({
         videoPath: targetVideo,
@@ -714,7 +715,9 @@ const server = http.createServer(async (req, res) => {
         ? removeCaptionMentions(customCaption)
         : ((tikTokConfig?.caption && tikTokConfig.caption.trim() !== '')
             ? removeCaptionMentions(tikTokConfig.caption)
-            : ensureCaptionHashtags(generatedVi.fullText, 'vi', post.title));
+            : withCallToAction(ensureCaptionHashtags(generatedVi.fullText, 'vi', post.title), callToAction('tiktok', 'vi')));
+      // Only generated captions get the follow line; a caption you typed is posted as written.
+      const instagramCaption = customCaption?.trim() ? finalCaption : withCallToAction(finalCaption, callToAction('instagram', captionLang));
       const finalMoodQuoteVi = enableMoodQuote !== false 
         ? (moodQuote !== undefined && moodQuote.trim() !== '' ? cleanPureText(moodQuote) : (generated.moodQuoteVi || generated.moodQuote || '')) 
         : '';
@@ -859,12 +862,12 @@ const server = http.createServer(async (req, res) => {
           translateText(source, 'en', true),
           finalMoodQuoteVi ? translateText(finalMoodQuoteVi, 'en', true) : Promise.resolve('')
         ]);
-        youtubeMetadata = buildYouTubeMetadata(`${englishCaption}\n${relevantHashtags(englishCaption, 'en')}`, { description: englishDescription, language: 'en' });
+        youtubeMetadata = buildYouTubeMetadata(`${englishCaption}\n${relevantHashtags(englishCaption, 'en')}`, { description: englishDescription, language: 'en', callToAction: callToAction('youtube', 'en') });
       }
       publishingStarted = true;
       const published = await publishPlatforms(
         { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads, autoPostX, autoPostYouTube },
-        { imagePaths: uploadPaths, videoPath: targetVideo, youtubeVideoPath, caption: finalCaption, tiktokCaption, ...youtubeMetadata, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
+        { imagePaths: uploadPaths, videoPath: targetVideo, youtubeVideoPath, caption: finalCaption, instagramCaption, tiktokCaption, ...youtubeMetadata, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
         { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: args.caption ?? tiktokCaption }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }), youtube: postToYouTubeShort },
         message => setPipelineProgress(jobId, message)
       );

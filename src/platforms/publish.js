@@ -15,7 +15,7 @@ export async function publishPlatforms(options, media, posters, progress = () =>
     tasks.push((async () => {
       progress('Đang đăng lên Instagram và Facebook…');
       try {
-        const posted = await posters.instagram({ imagePaths: media.imagePaths, caption: media.caption, headless, shareToFacebook: Boolean(options.autoPostFB) });
+        const posted = await posters.instagram({ imagePaths: media.imagePaths, caption: media.instagramCaption ?? media.caption, headless, shareToFacebook: Boolean(options.autoPostFB) });
         if (!posted?.success) throw new Error(posted?.message || 'Chưa xác nhận đăng thành công');
         result.igPosted = Boolean(options.autoPostIG);
         result.fbPosted = Boolean(options.autoPostFB && posted.facebookShared);

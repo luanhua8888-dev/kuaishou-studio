@@ -49,7 +49,10 @@ YÊU CẦU BẮT BUỘC:
 3. Tuyệt đối KHÔNG viết chung chung, KHÔNG lặp lại câu từ giữa các bài. Mỗi bài đăng phải có một câu chuyện và cảm xúc riêng biệt.
 4. Giọng điệu: Sâu lắng, thơ mộng, chạm cảm xúc hoặc dí dỏm tự nhiên, cực kỳ hợp gu giới trẻ TikTok.
 5. Độ dài mỗi câu: Ngắn gọn từ 6 đến 16 từ (để chữ không bị tràn màn hình video 9:16).
-6. Định dạng kết quả: CHỈ trả về một JSON array chứa ${sceneCount} chuỗi, ví dụ:
+6. CÂU 1 LÀ CÂU MỞ ĐẦU GIỮ CHÂN NGƯỜI XEM (hiện ngay khung hình đầu, quyết định người xem có lướt qua hay không): tối đa 10 từ, gợi tò mò hoặc chạm cảm xúc ngay lập tức (ví dụ: một điều ít ai để ý, một cảm giác ai cũng từng trải qua, một lời thì thầm với người xem). Không giật tít sai sự thật, không hứa điều video không có.
+7. CÂU CUỐI là một câu hỏi ngắn, gần gũi, mời người xem trả lời trong phần bình luận (ví dụ hỏi về trải nghiệm hay lựa chọn của chính họ), không xin like/follow.
+8. Các câu ở giữa nối mạch thành một câu chuyện nhỏ có cao trào nhẹ, để người xem muốn xem đến cuối.
+9. Định dạng kết quả: CHỈ trả về một JSON array chứa ${sceneCount} chuỗi, ví dụ:
 ["câu 1", "câu 2", "câu 3", "câu 4"]
 Không thêm bất kỳ lời giải thích nào ngoài mảng JSON này.`;
 }
