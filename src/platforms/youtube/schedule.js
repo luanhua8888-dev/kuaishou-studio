@@ -3,9 +3,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { QUEUE_DIR } from '../../paths.js';
 
-// Up to eight demand-driven windows per UTC day; empty windows stay empty.
-// A broad EU/US experiment, not an anti-spam or recommendation guarantee.
-export const YOUTUBE_UTC_HOURS = [1, 4, 7, 10, 13, 16, 19, 22];
+// 09:00, 14:00 and 19:00 in Asia/Bangkok (UTC+7); empty windows stay empty.
+// An experimental posting cadence, not a recommendation guarantee.
+export const YOUTUBE_UTC_HOURS = [2, 7, 12];
+export const YOUTUBE_MIN_SPACING_MS = 5 * 60 * 60 * 1000;
 export function nextYouTubeSlot(now, reservations = []) {
   const earliest = now + 60 * 60 * 1000; // Upload/processing lead time.
   const last = Math.max(0, ...reservations.map(item => Date.parse(item.publishAt)));
@@ -14,8 +15,8 @@ export function nextYouTubeSlot(now, reservations = []) {
   for (let day = 0; day < 370; day++) {
     for (const hour of YOUTUBE_UTC_HOURS) {
       const candidate = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + day, hour);
-      // Also protect spacing when upgrading from the previous four-slot schedule.
-      if (candidate >= earliest && candidate >= last + 2 * 60 * 60 * 1000) return new Date(candidate).toISOString();
+      // Respect reservations made under earlier schedules as well.
+      if (candidate >= earliest && candidate >= last + YOUTUBE_MIN_SPACING_MS) return new Date(candidate).toISOString();
     }
   }
   throw new Error('Không tìm được lịch YouTube phù hợp');

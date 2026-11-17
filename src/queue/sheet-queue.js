@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomInt } from 'node:crypto';
 
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJl2g/edit?usp=sharing';
-const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, autoPostX: false, autoPostYouTube: false, asReel: true, captionLang: 'en', enableMoodQuote: true };
+const DEFAULT_OPTIONS = { autoPostIG: true, autoPostTikTok: true, autoPostFB: true, autoPostThreads: true, autoPostX: false, autoPostYouTube: false, youtubePublishMode: 'scheduled', asReel: true, captionLang: 'en', enableMoodQuote: true };
 
 export function rowLink(value) {
   const match = String(value || '').match(/https?:\/\/[^\s"<>]+/i);
@@ -119,6 +119,7 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           for (const [option, flag] of [['autoPostIG', 'igPosted'], ['autoPostFB', 'fbPosted'], ['autoPostTikTok', 'tiktokPosted'], ['autoPostThreads', 'threadsPosted'], ['autoPostX', 'xPosted'], ['autoPostYouTube', 'youtubePosted']]) {
             if (entry.published?.[flag]) requested[option] = false;
           }
+          if (entry.youtubeQueueId) requested.autoPostYouTube = false;
           const result = await runPipeline(url, requested);
           entry.prepareFailures = 0;
           entry.skippedPlatforms = [...new Set([...(entry.skippedPlatforms || []), ...(result.skippedPlatforms || [])])];
@@ -130,7 +131,12 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
           const publishedFlags = { instagram: 'igPosted', facebook: 'fbPosted', tiktok: 'tiktokPosted', threads: 'threadsPosted', x: 'xPosted', youtube: 'youtubePosted' };
           entry.skippedPlatforms = entry.skippedPlatforms.filter(platform => !entry.published[publishedFlags[platform]]);
           if (!entry.skippedPlatforms.length) entry.skipWarning = null;
-          entry.warning = [entry.skipWarning, result.threadsWarning, result.youtubeWarning].filter(Boolean).join(' ') || null;
+          if (result.youtubeWarning) entry.youtubeWarning = result.youtubeWarning;
+          entry.warning = [entry.skipWarning, result.threadsWarning, entry.youtubeWarning].filter(Boolean).join(' ') || null;
+          if (result.youtubeQueued) {
+            entry.youtubeQueueId = result.youtubeQueueId;
+            entry.youtubeRetryAt = result.youtubeRetryAt;
+          }
           if (result.youtubeScheduledAt) entry.youtubeScheduledAt = result.youtubeScheduledAt;
           if (result.partialFailure) {
             entry.status = 'partial';
@@ -223,7 +229,9 @@ export function createSheetQueue({ statePath, settingsPath, sheet, runPipeline, 
         if (enabled) { state.error = null; state.blankCount = 0; }
       }
       if (options) for (const key of Object.keys(DEFAULT_OPTIONS)) {
-        if (key === 'captionLang') {
+        if (key === 'youtubePublishMode') {
+          if (['scheduled', 'now'].includes(options[key])) state.options[key] = options[key];
+        } else if (key === 'captionLang') {
           if (['en', 'vi', 'both', 'raw'].includes(options[key])) state.options[key] = options[key];
         } else if (typeof options[key] === 'boolean') state.options[key] = options[key];
       }

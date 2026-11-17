@@ -89,6 +89,16 @@
     .queue-state[data-tone=error] #sheetStatus { color: #fca5a5; }
     #sheetStatus { font-size: 10.5px; font-weight: 600; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; flex: 1; }
     #sheetCountdown { color: var(--text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .platform-progress { display: grid; gap: 6px; margin-top: 12px; }
+    .platform-progress[hidden] { display: none; }
+    .platform-progress-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; border: 1px solid #334155; border-radius: 9px; background: #111d2e; font-size: 11px; }
+    .platform-progress-item strong { color: #e2e8f0; }
+    .platform-progress-item[data-status=running] { border-color: #0284c7; }
+    .platform-progress-item[data-status=done] { border-color: #16734e; }
+    .platform-progress-item[data-status=failed] { border-color: #a33245; }
+    .platform-progress-item[data-status=queued], .platform-progress-item[data-status=warning] { border-color: #a47724; }
+    .platform-progress-state { color: #cbd5e1; font-variant-numeric: tabular-nums; }
+    .platform-progress-message { grid-column: 1 / -1; color: #94a3b8; overflow-wrap: anywhere; line-height: 1.5; }
     @keyframes pulse-dot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .7; } }
     .queue-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
     .queue-actions .btn { min-width: 0; min-height: 31px; padding: 5px 8px; font-size: 10.5px; font-weight: 700; border-radius: 8px; }
@@ -465,6 +475,7 @@
             <button id="btnRun" class="btn btn-primary">Bắt đầu hàng đợi</button>
           </div>
         </div>
+        <div id="sheetPlatformProgress" class="platform-progress" role="group" aria-label="Tiến độ từng nền tảng trong hàng đợi" hidden></div>
         <details class="direct-link">
           <summary>Đăng một link riêng</summary>
           <input type="text" id="urlInput" class="url-input" aria-label="Đường link Kuaishou" placeholder="Dán link Kuaishou tại đây…" autocomplete="off">
@@ -573,16 +584,21 @@
               <div class="platform-icon" aria-hidden="true" style="background:#2a171a;border:1px solid #5f252a;color:#ff4b55;font-weight:800">▶</div>
               <div class="platform-meta">
                 <span class="platform-name">YouTube Shorts</span>
-                <span class="platform-desc">Video dọc · tối đa 3 phút</span>
+                <span class="platform-desc">Video dọc · không dùng âm thanh nguồn · cần quyền hình ảnh</span>
               </div>
             </div>
             <div class="platform-controls">
               <button type="button" id="youtubeConnectBtn" class="ig-status-pill" title="Kết nối kênh YouTube">Kết nối</button>
+              <select id="youtubePublishMode" aria-label="Chế độ đăng YouTube" title="Áp dụng cho lượt chạy thủ công và link tiếp theo trong hàng đợi; không đổi video đã xếp hàng">
+                <option value="scheduled">Tự lên lịch</option>
+                <option value="now">Đăng ngay</option>
+              </select>
               <label class="toggle-switch"><input type="checkbox" id="chkAutoPostYouTube" aria-label="Đăng lên YouTube Shorts"><span class="slider"></span></label>
             </div>
           </div>
         </div>
         <p class="helper platform-helper">Bấm trạng thái để đăng nhập. Facebook liên kết qua Instagram.</p>
+        <p class="helper platform-helper" id="youtubeQueueStatus" role="status" hidden></p>
       </section>
 
       <!-- PHẦN Ở DƯỚI: TÙY CHỌN NỘI DUNG CAO CẤP -->
@@ -621,7 +637,7 @@
               </div>
               <label class="check-field" style="margin-bottom: 8px;">
                 <input type="checkbox" id="chkAddMoodText" checked>
-                <span>Chèn câu chuyện cảm xúc lên video TikTok</span>
+                <span>Chèn câu chuyện TikTok (YouTube không chèn chữ)</span>
               </label>
               <div class="key-input-row">
                 <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán API Key (AIzaSy...)" style="padding: 6px 10px; height: 32px; font-size: 12px;">
@@ -658,6 +674,7 @@
     </section>
     </main>
     <div id="statusBox" class="status-box" role="status" aria-live="polite"></div>
+    <div id="manualPlatformProgress" class="platform-progress" role="group" aria-label="Tiến độ đăng từng nền tảng" hidden></div>
 
     <div id="resultSection" class="result-section card">
       <div class="result-toolbar"><h2>Kết quả nội dung</h2><button type="button" class="btn" id="btnCloseResult" aria-label="Đóng kết quả nội dung">Đóng ×</button></div>
@@ -1116,6 +1133,8 @@
     let sheetRunning = false;
     let sheetStage = null;
     let sheetStageStartedAt = null;
+    let sheetPlatforms = [];
+    let manualProgressState = { active: false, message: '', stageStartedAt: null, platforms: [] };
     let threadsOnlyMode = false;
 
     function updateSheetCountdown() {
@@ -1123,7 +1142,7 @@
       const value = document.getElementById('titleCountdownValue');
       const label = document.getElementById('titleCountdownLabel');
       const formatTime = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-      if (!sheetEnabled && !sheetRunning) {
+      if (!sheetEnabled && !sheetRunning && !manualProgressState.active) {
         sheetCountdown.textContent = '';
         clock.dataset.state = 'paused';
         value.textContent = '—';
@@ -1131,14 +1150,19 @@
         document.title = 'Tạm dừng · Kuaishou Studio';
         return;
       }
-      if (sheetRunning) {
-        const startedAt = typeof sheetStageStartedAt === 'number' ? sheetStageStartedAt : Date.parse(sheetStageStartedAt);
+      if (sheetRunning || manualProgressState.active) {
+        const stage = sheetRunning ? sheetStage : manualProgressState.message;
+        const platforms = sheetRunning ? sheetPlatforms : manualProgressState.platforms;
+        const activeNames = platforms.filter(item => item.status === 'running').map(item => item.label);
+        const rawStartedAt = sheetRunning ? sheetStageStartedAt : manualProgressState.stageStartedAt;
+        const startedAt = typeof rawStartedAt === 'number' ? rawStartedAt : Date.parse(rawStartedAt);
         const seconds = Number.isFinite(startedAt) ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
-        sheetCountdown.textContent = `${sheetStage || 'Đang xử lý lượt hiện tại…'}${seconds === null ? '' : ` · ${Math.floor(seconds / 60)} phút ${seconds % 60} giây`}`;
+        sheetCountdown.textContent = `${stage || 'Đang xử lý lượt hiện tại…'}${seconds === null ? '' : ` · ${Math.floor(seconds / 60)} phút ${seconds % 60} giây`}`;
         clock.dataset.state = 'running';
         value.textContent = seconds === null ? '…' : formatTime(seconds);
-        label.textContent = 'Đang xử lý · Thời gian đã chạy';
-        document.title = `Đang xử lý${seconds === null ? '' : ` ${formatTime(seconds)}`} · Kuaishou Studio`;
+        label.textContent = activeNames.length ? `Đang đăng: ${activeNames.join(' + ')}` : stage || 'Đang xử lý · Thời gian đã chạy';
+        label.title = stage || label.textContent;
+        document.title = `${activeNames.length ? activeNames.join(' + ') : 'Đang xử lý'}${seconds === null ? '' : ` ${formatTime(seconds)}`} · Kuaishou Studio`;
         return;
       }
       if (!sheetNextRunAt || !Number.isFinite(Date.parse(sheetNextRunAt))) {
@@ -1220,6 +1244,8 @@
       sheetRunning = data.running;
       sheetStage = data.stage;
       sheetStageStartedAt = data.stageStartedAt;
+      sheetPlatforms = data.platforms || [];
+      renderPlatformProgress('sheetPlatformProgress', sheetRunning ? sheetPlatforms : []);
       sheetNextRunAt = data.nextRunAt;
       if (Number.isFinite(data.intervalSeconds)) {
         document.getElementById('clockInterval').textContent = data.intervalSeconds < 60
@@ -1400,6 +1426,21 @@
         youtubeConnectBtn.textContent = data.connected ? `Đã kết nối · ${data.channel}` : (data.configured ? 'Kết nối' : 'Thiếu OAuth');
         youtubeConnectBtn.title = data.connected ? `Kênh YouTube: ${data.channel}` : 'Kết nối kênh YouTube';
         youtubeConnectBtn.classList.toggle('connected', Boolean(data.connected));
+        const queueStatus = document.getElementById('youtubeQueueStatus');
+        const queue = data.uploadQueue || {};
+        const summary = [];
+        if (queue.pending) summary.push(`${queue.pending} video đang chờ tải trên máy (chưa lên YouTube)`);
+        if (queue.uploading) summary.push(`${queue.uploading} video đang tải lên`);
+        if (queue.cooldownUntil && queue.pending) summary.push(`Thử lại từ ${new Date(queue.cooldownUntil).toLocaleString('vi-VN')}`);
+        if (queue.attention) summary.push(`${queue.attention} video cần kiểm tra thủ công; xem trạng thái bên dưới`);
+        if (queue.otherAccountPending) summary.push(`${queue.otherAccountPending} video chờ kết nối lại tài khoản YouTube ban đầu`);
+        const latest = queue.jobs?.[queue.jobs.length - 1];
+        if (latest?.status === 'done') summary.push(`Video gần nhất đã tải: ${latest.url}`);
+        if (['failed', 'uncertain'].includes(latest?.status)) summary.push(latest.error);
+        if (queue.pending) summary.push('Giữ app chạy để tự tiếp tục; hàng chờ được giữ khi khởi động lại.');
+        queueStatus.hidden = summary.length === 0;
+        queueStatus.textContent = summary.join(' · ');
+        queueStatus.title = (queue.jobs || []).map(job => `${job.title || job.id}: ${job.status}${job.error ? ` — ${job.error}` : ''}`).join('\n');
       } catch { youtubeConnectBtn.textContent = 'Chưa kết nối'; }
     }
     checkYouTubeStatus();
@@ -1604,6 +1645,53 @@
       }
     });
 
+    function updatePlatformTimers() {
+      document.querySelectorAll('[data-platform-start]').forEach(timer => {
+        const end = Number(timer.dataset.platformEnd) || Date.now();
+        const seconds = Math.max(0, Math.floor((end - Number(timer.dataset.platformStart)) / 1000));
+        timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      });
+    }
+
+    function renderPlatformProgress(containerId, platforms) {
+      const container = document.getElementById(containerId);
+      container.replaceChildren();
+      container.hidden = !platforms.length;
+      const labels = { running: 'Đang đăng', done: 'Hoàn tất', failed: 'Có lỗi', queued: 'Chờ tải trên máy', warning: 'Cần kiểm tra' };
+      for (const platform of platforms) {
+        const card = document.createElement('div');
+        card.className = 'platform-progress-item';
+        card.dataset.status = platform.status;
+        const name = document.createElement('strong');
+        name.textContent = platform.label;
+        const state = document.createElement('span');
+        state.className = 'platform-progress-state';
+        const stateLabel = document.createElement('span');
+        stateLabel.textContent = labels[platform.status] || 'Đang xử lý';
+        const timer = document.createElement('span');
+        timer.dataset.platformStart = String(platform.startedAt);
+        timer.dataset.platformEnd = platform.endedAt == null ? '' : String(platform.endedAt);
+        timer.setAttribute('aria-live', 'off');
+        state.append(stateLabel, document.createTextNode(' · '), timer);
+        const message = document.createElement('div');
+        message.className = 'platform-progress-message';
+        message.textContent = platform.message;
+        card.append(name, state, message);
+        container.appendChild(card);
+      }
+      updatePlatformTimers();
+    }
+
+    function finishManualProgress() {
+      const endedAt = Date.now();
+      manualProgressState.platforms = manualProgressState.platforms.map(platform => platform.status === 'running'
+        ? { ...platform, status: 'warning', endedAt, message: 'Đã ngừng theo dõi; kiểm tra nền tảng trước khi đăng lại.' } : platform);
+      renderPlatformProgress('manualPlatformProgress', manualProgressState.platforms);
+      manualProgressState.active = false;
+      updateSheetCountdown();
+    }
+    setInterval(updatePlatformTimers, 1000);
+
     function showStatus(text, type = 'loading') {
       statusBox.style.display = 'flex';
       statusBox.className = `status-box status-${type}`;
@@ -1725,14 +1813,19 @@
       const shouldPostThreads = chkAutoPostThreads.checked;
       const shouldPostX = chkAutoPostX.checked;
       const shouldPostYouTube = chkAutoPostYouTube.checked;
+      const youtubePublishMode = document.getElementById('youtubePublishMode').value;
 
       btnRun.disabled = true;
       btnOpenFolder.style.display = 'none';
       let progressTimer = null;
       let progressActive = true;
+      let progressPolling = false;
       let lastProgressMessage = '';
 
       let statusMsg = '[1/3] Đang phân tích Kuaishou & tạo Caption/Hashtags...';
+      manualProgressState = { active: true, message: statusMsg, stageStartedAt: Date.now(), platforms: [] };
+      renderPlatformProgress('manualPlatformProgress', []);
+      updateSheetCountdown();
       showStatus(statusMsg, 'loading');
 
       try {
@@ -1758,6 +1851,7 @@
         if (shouldPostFB) activeTargets.push('Facebook');
         if (shouldPostThreads) activeTargets.push('Threads');
         if (shouldPostX) activeTargets.push('X');
+        if (shouldPostYouTube) activeTargets.push(youtubePublishMode === 'now' ? 'YouTube (đăng ngay)' : 'YouTube (lên lịch)');
 
         if (activeTargets.length > 0) {
           showStatus(`Đang tải nội dung, tạo Caption & tự động đăng lên: ${activeTargets.join(' + ')}...`, 'loading');
@@ -1767,14 +1861,22 @@
 
         const jobId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
         progressTimer = setInterval(async () => {
+          if (progressPolling || !progressActive) return;
+          progressPolling = true;
           try {
             const progress = await fetch(`/api/progress?jobId=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
-            const { message } = await progress.json();
+            const { message, platforms = [], stageStartedAt } = await progress.json();
+            if (progressActive) {
+              manualProgressState = { active: true, message: message || manualProgressState.message,
+                stageStartedAt: stageStartedAt || manualProgressState.stageStartedAt, platforms };
+              renderPlatformProgress('manualPlatformProgress', platforms);
+              updateSheetCountdown();
+            }
             if (progressActive && message && message !== lastProgressMessage && message !== 'Hoàn tất.' && !message.startsWith('Lỗi:')) {
               lastProgressMessage = message;
               showStatus(message, 'loading');
             }
-          } catch {}
+          } catch {} finally { progressPolling = false; }
         }, 1200);
 
         const res = await fetch('/api/run-pipeline', {
@@ -1788,6 +1890,7 @@
             autoPostThreads: shouldPostThreads,
             autoPostX: shouldPostX,
             autoPostYouTube: shouldPostYouTube,
+            youtubePublishMode,
             asReel: chkAsReel.checked,
             captionLang: captionLangSelect.value,
             jobId,
@@ -1797,6 +1900,10 @@
         });
 
         const data = await res.json();
+        if (data.platformProgress) {
+          manualProgressState.platforms = data.platformProgress;
+          renderPlatformProgress('manualPlatformProgress', data.platformProgress);
+        }
         if (data.partialFailure && data.post) {
           currentResult = data;
           renderResult(data);
@@ -1821,7 +1928,7 @@
         if (postedList.length > 0) {
           successMsg += ` ĐÃ ĐĂNG LÊN ${postedList.join(' + ')} THÀNH CÔNG!`;
           if (data.cleanedUp) successMsg += ' Đã dọn file tạm.';
-        } else {
+        } else if (data.downloadPath) {
           successMsg += ` Đã lưu vào: ${data.downloadPath}`;
         }
         if (data.threadsWarning) successMsg += ` Threads: ${data.threadsWarning}`;
@@ -1844,6 +1951,7 @@
       } finally {
         progressActive = false;
         if (progressTimer) clearInterval(progressTimer);
+        finishManualProgress();
         btnRun.disabled = false;
       }
     }

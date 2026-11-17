@@ -13,9 +13,9 @@ let hasFfmpeg = true;
 try { execSync('ffmpeg -version', { stdio: 'ignore' }); } catch { hasFfmpeg = false; }
 const ffmpegTest = (name, fn) => test(name, { skip: !hasFfmpeg && 'ffmpeg not found on PATH' }, fn);
 
-ffmpegTest('sanitizeVideoAudioForCopyright creates safe video with pitch shifted audio', async () => {
+ffmpegTest('source audio is removed and video retained without modifying the source', async () => {
   const testInput = path.join(root, 'test_anti_copy_input.mp4');
-  const expectedSafe = path.join(root, 'test_anti_copy_input_safe.mp4');
+  const outputs = [];
 
   try {
     // Generate 1-second sample video with audio
@@ -24,15 +24,22 @@ ffmpegTest('sanitizeVideoAudioForCopyright creates safe video with pitch shifted
     assert.ok(fs.existsSync(testInput), 'Input video should exist');
 
     const resultPath = await sanitizeVideoAudioForCopyright(testInput);
-    assert.equal(resultPath, expectedSafe, 'Should return path to safe video');
+    outputs.push(resultPath);
+    assert.match(resultPath, /_no_source_audio_/);
     assert.ok(fs.existsSync(resultPath), 'Safe video file must exist on disk');
 
-    // Calling it again should return existing safe path
+    const streams = file => JSON.parse(execSync(`ffprobe -v error -show_entries stream=codec_type -of json "${file}"`, { encoding: 'utf8' })).streams;
+    assert.equal(streams(resultPath).some(s => s.codec_type === 'audio'), false);
+    assert.equal(streams(resultPath).some(s => s.codec_type === 'video'), true);
+    assert.equal(streams(testInput).some(s => s.codec_type === 'audio'), true);
+    // A verified silent file needs no further processing.
+    assert.equal(await sanitizeVideoAudioForCopyright(resultPath), resultPath);
     const secondCall = await sanitizeVideoAudioForCopyright(testInput);
-    assert.equal(secondCall, expectedSafe);
+    outputs.push(secondCall);
+    assert.equal(streams(secondCall).some(s => s.codec_type === 'audio'), false);
   } finally {
     if (fs.existsSync(testInput)) fs.unlinkSync(testInput);
-    if (fs.existsSync(expectedSafe)) fs.unlinkSync(expectedSafe);
+    for (const output of outputs) fs.rmSync(output, { force: true });
   }
 });
 

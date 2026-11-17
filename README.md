@@ -1,5 +1,19 @@
 # Kuaishou Media Downloader & Multi-Platform Poster (No Watermark)
 
+## YouTube Shorts
+
+Tiến độ đăng: đồng hồ hiển thị tên những nền tảng đang xử lý song song. Mỗi nền tảng có trạng thái và bộ đếm riêng ở giao diện (chạy thủ công và Google Sheets); đã xong, có lỗi và chờ tải YouTube được phân biệt, bộ đếm dừng khi nền tảng kết thúc.
+
+Xem [playbook chính sách và tối ưu YouTube](docs/youtube-playbook.md): quyền nội dung/nhạc, nội dung tái sử dụng, khai báo AI, checklist xuất bản và thử nghiệm Analytics. Lịch mới: 09:00, 14:00 và 19:00 (UTC+7), tối thiểu 5 giờ giữa các lượt; đây là thử nghiệm, không bảo đảm lượt xem.
+
+Đăng thủ công: bật YouTube Shorts, chọn **Đăng ngay** cạnh nút kết nối rồi bấm nút chạy. Mặc định **Tự lên lịch**; lựa chọn đăng ngay không áp dụng hàng đợi Google Sheets và không sửa video đã tải lên. YouTube cần xử lý video trước khi hiển thị; nếu chưa xác nhận công khai, ứng dụng cảnh báo để kiểm tra Studio thay vì đăng lại.
+
+Dựng YouTube: lướt nhanh toàn bộ ảnh một lượt mở đầu, rồi phát lại chậm với animation chuyển cảnh 0,5 giây (trượt, hé ảnh, hòa mờ). Không zoom, không chèn chữ, không kết tối dần; một ảnh giữ 6 giây. Video nguồn giữ nguyên thời lượng và âm thanh. Chưa tự xác minh quyền nội dung/nhạc.
+
+Khi YouTube trả `uploadLimitExceeded` **trước khi bắt đầu tải**, app giữ một bản video riêng trong `data/queue/youtube-uploads/`, báo **đang chờ tải trên máy** (không phải đã đăng/lên lịch trên YouTube), và tự thử lại sau 24 giờ. Nếu YouTube vẫn chặn thì chờ thêm 24 giờ; đây là khoảng chờ thử lại, không bảo đảm YouTube đã mở giới hạn. Video mới gửi trong thời gian chờ được xếp hàng mà không gọi API tải lại. Khi tải thành công, chế độ **Tự lên lịch** chọn giờ công khai còn phù hợp; chế độ **Đăng ngay** yêu cầu công khai sau khi tải/xử lý xong. Hàng chờ tồn tại sau khi khởi động lại; cần máy và server chính (`npm run ui`) đang chạy để tiếp tục. Không đổi kênh khi đang có video chờ: hàng chờ gắn với kết nối OAuth ban đầu. Lỗi mạng/kết quả chưa rõ không được tự đăng lại; app giữ file để kiểm tra Studio, tránh trùng video. Chỉ bản sao của video đã xác nhận tải thành công mới được dọn tự động. Xem trạng thái hàng chờ bên dưới lựa chọn nền tảng hoặc `/api/youtube/status`.
+
+Phục hồi một video đã render và **đã nhận đúng lỗi `uploadLimitExceeded` trước khi tải** từ phiên bản cũ: `node scripts/cli/defer-youtube-upload.mjs downloads/<folder> --confirmed-upload-limit scheduled`. Lệnh chỉ sao chép video/metadata vào hàng chờ, không gọi API và không dựng lại. Không dùng cho lượt tải có kết quả chưa rõ.
+
 ## Cấu trúc dự án
 
 ```text
@@ -205,6 +219,14 @@ https://docs.google.com/spreadsheets/d/1UFeWWg3cOwbOEwhZDftC_qUWOE_8UwX49sincJgJ
 - Khi xử lý, giao diện hiển thị bước hiện tại và thời gian của bước đó. Ảnh được tải tối đa 3 ảnh cùng lúc; video đã tạo được dùng lại khi thử lại nếu ảnh, nhạc và nội dung chữ không đổi. Video và nhạc được ghi dần xuống file tạm, chỉ timeout khi không nhận dữ liệu trong 30 giây, với giới hạn tổng 30 phút. Khi kết nối đứt, ứng dụng tải tiếp nếu CDN hỗ trợ xác nhận cùng phiên bản file, hoặc thử URL dự phòng do Kuaishou cung cấp. Chỉ file tải hoàn chỉnh được dùng để đăng; thao tác đăng bài không được tự động phát lại khi chưa rõ kết quả.
 
 ---
+
+## Âm thanh và quyền sử dụng nội dung
+
+- YouTube mặc định không dùng nhạc/âm thanh nguồn Kuaishou. Slideshow được dựng không có nhạc nguồn; mọi video được kiểm tra và loại track âm thanh trước upload, kể cả video trong hàng chờ cũ.
+- Bỏ đổi cao độ âm thanh: xử lý này không cấp quyền sử dụng nội dung. Nếu loại âm thanh thất bại, dừng đăng thay vì dùng lại bản gốc.
+- Video đầu ra có thể không có tiếng. Chưa có chế độ thêm nhạc được cấp phép; không tự nhận nhạc tải về là an toàn.
+- Việc loại nhạc không bảo đảm tránh Content ID: hình ảnh và video cũng cần quyền sử dụng. App chưa kiểm tra được Content ID trước đăng. Xác nhận upload/công khai không đồng nghĩa vượt qua kiểm tra bản quyền.
+- Không tự sửa hoặc đăng lại video đã bị claim. Kiểm tra chi tiết trong YouTube Studio trước.
 
 ## Thư mục lưu file
 

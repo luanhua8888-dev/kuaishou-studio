@@ -25,9 +25,40 @@ function fixture(t, cells, pipeline = async () => ({ success: true })) {
   return { queue, cleared, calls, settingsPath };
 }
 
+test('next link receives the selected immediate YouTube publication mode', async t => {
+  let received;
+  const { queue } = fixture(t, ['https://v.kuaishou.com/next'], async (_, options) => {
+    received = options;
+    return { success: true };
+  });
+  queue.configure({ options: { autoPostYouTube: true, youtubePublishMode: 'now' } });
+  await queue.tick();
+  assert.equal(received.youtubePublishMode, 'now');
+  queue.configure({ options: { youtubePublishMode: 'invalid' } });
+  assert.equal(queue.snapshot().options.youtubePublishMode, 'now');
+});
+
 test('accepts only Kuaishou URLs', () => {
   assert.equal(rowLink('Share https://v.kuaishou.com/abc'), 'https://v.kuaishou.com/abc');
   assert.equal(rowLink('https://docs.google.com/example'), null);
+});
+
+test('retrying another platform does not enqueue YouTube again or mark queued video posted', async t => {
+  const requested = [];
+  const { queue } = fixture(t, ['https://v.kuaishou.com/queued-youtube'], async (_, options) => {
+    requested.push(options);
+    return requested.length === 1
+      ? { success: false, partialFailure: true, youtubeQueued: true, youtubeQueueId: 'queued-id', youtubeRetryAt: 123,
+        youtubeWarning: 'Đang chờ trên máy', error: 'Threads failed' }
+      : { success: true, threadsPosted: true };
+  });
+  queue.configure({ options: { autoPostYouTube: true, autoPostThreads: true } });
+  await queue.tick();
+  assert.equal(queue.snapshot().items[0].published.youtubePosted, false);
+  assert.equal(queue.snapshot().items[0].youtubeQueueId, 'queued-id');
+  queue.configure({ enabled: true });
+  await queue.tick();
+  assert.equal(requested[1].autoPostYouTube, false);
 });
 
 test('queue retains an X failure and does not repost X after confirmed success', async t => {
