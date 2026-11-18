@@ -28,6 +28,7 @@ import { createTikTokSlideshow, readTikTokSlideshowConfig } from './media/tiktok
 import { sanitizeVideoAudioForCopyright } from './media/anti-copyright.js';
 import { youtubeOAuth } from './platforms/youtube/oauth.js';
 import { postToYouTubeShort } from './platforms/youtube/poster.js';
+import { createYouTubeUploadQueue } from './platforms/youtube/upload-queue.js';
 import { polishYouTubeMetadata } from './platforms/youtube/metadata.js';
 import { prepareYouTubeShortVideo } from './platforms/youtube/video.js';
 
@@ -52,7 +53,11 @@ function sendJson(res, status, body, headers = {}) {
 }
 
 const pipelineProgress = new Map();
+const pipelinePlatforms = new Map();
 const pipelineStageStarted = new Map();
+const youtubeUploadQueue = createYouTubeUploadQueue({
+  post: postToYouTubeShort, accountKey: () => youtubeOAuth.queueAccountKey()
+});
 let sheetJobId = null;
 const googleSheet = createGoogleSheet({ settingsPath: SETTINGS_FILE });
 const sheetQueue = createSheetQueue({
@@ -68,7 +73,7 @@ const sheetQueue = createSheetQueue({
   }
 });
 
-function setPipelineProgress(jobId, message) {
+function setPipelineProgress(jobId, message, details) {
   if (typeof jobId === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(jobId)) {
     if (pipelineProgress.get(jobId) !== message) {
       const started = pipelineStageStarted.get(jobId);
@@ -76,6 +81,7 @@ function setPipelineProgress(jobId, message) {
       pipelineStageStarted.set(jobId, Date.now());
     }
     pipelineProgress.set(jobId, message);
+    if (details?.platforms) pipelinePlatforms.set(jobId, details.platforms);
   }
 }
 
@@ -97,7 +103,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (reqUrl.pathname === '/api/youtube/status' && req.method === 'GET') {
-    sendJson(res, 200, youtubeOAuth.status(), { 'Cache-Control': 'no-store' });
+    sendJson(res, 200, { ...youtubeOAuth.status(), uploadQueue: youtubeUploadQueue.status() }, { 'Cache-Control': 'no-store' });
     return;
   }
   if (reqUrl.pathname === '/api/youtube/oauth/start' && req.method === 'GET') {
@@ -579,7 +585,10 @@ const server = http.createServer(async (req, res) => {
 
   // 9. API: 1-Click Run Pipeline (Tải nội dung + Tự động tạo Caption & Hashtag + Tự động đăng IG/TikTok/Facebook)
   if (req.method === 'GET' && reqUrl.pathname === '/api/progress') {
-    sendJson(res, 200, { message: pipelineProgress.get(reqUrl.searchParams.get('jobId')) || '' }, { 'Cache-Control': 'no-store' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    const jobId = reqUrl.searchParams.get('jobId');
+    res.end(JSON.stringify({ message: pipelineProgress.get(jobId) || '',
+      stageStartedAt: pipelineStageStarted.get(jobId) || null, platforms: pipelinePlatforms.get(jobId) || [] }));
     return;
   }
 
@@ -666,6 +675,7 @@ const server = http.createServer(async (req, res) => {
         ...(SESSION_PLATFORM ? { options: applySessionMode(result.options) } : {}),
         stage: sheetJobId ? pipelineProgress.get(sheetJobId) || null : null,
         stageStartedAt: sheetJobId ? pipelineStageStarted.get(sheetJobId) || null : null,
+        platforms: sheetJobId ? pipelinePlatforms.get(sheetJobId) || [] : [],
       }, { 'Cache-Control': 'no-store' });
     } catch (error) {
       sendJson(res, 400, { error: error.message });
@@ -677,8 +687,9 @@ const server = http.createServer(async (req, res) => {
     let jobId = null;
     let publishingStarted = false;
     try {
-      let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), autoPostX = false, autoPostYouTube = false, asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
+      let { url, autoPostIG, autoPostTikTok, autoPostFB, autoPostThreads = Boolean(autoPostIG), autoPostX = false, autoPostYouTube = false, youtubePublishMode = 'scheduled', asReel, customCaption, captionLang = 'en', moodQuote, enableMoodQuote = true, slideshowConfig, jobId: requestJobId } = await readJsonBody(req);
       if (SESSION_PLATFORM) ({ autoPostIG, autoPostFB, autoPostThreads, autoPostTikTok, autoPostX, autoPostYouTube } = applySessionMode());
+      if (!['scheduled', 'now'].includes(youtubePublishMode)) throw new Error('Invalid YouTube publication mode');
       if (THREADS_ONLY && (autoPostIG || autoPostTikTok || autoPostFB || autoPostX)) throw new Error('Phiên này chỉ đăng Threads.');
       const tikTokConfig = autoPostTikTok ? readTikTokSlideshowConfig(slideshowConfig) : null;
       jobId = requestJobId;
@@ -750,24 +761,19 @@ const server = http.createServer(async (req, res) => {
         targetVideo = videoPath;
 
         try {
-          setPipelineProgress(jobId, 'Đang tối ưu âm thanh bản quyền cho video…');
+          setPipelineProgress(jobId, 'Đang loại âm thanh nguồn chưa xác minh quyền sử dụng…');
           const safeVideoPath = await sanitizeVideoAudioForCopyright(videoPath);
           if (safeVideoPath && fs.existsSync(safeVideoPath) && fs.statSync(safeVideoPath).size > 0) {
             uploadPaths = [safeVideoPath];
             targetVideo = safeVideoPath;
           }
         } catch (sanitizeErr) {
-          console.warn('[Server] Không thể xử lý lách bản quyền video, sử dụng file gốc:', sanitizeErr.message);
+          throw sanitizeErr;
         }
 
         if (autoPostYouTube) {
-          setPipelineProgress(jobId, 'Đang chuẩn hóa khung dọc 9:16 và thời lượng YouTube Shorts…');
-          const prepared = await prepareYouTubeShortVideo(videoPath, path.join(outputDir, 'youtube_short.mp4'));
-          try {
-            youtubeVideoPath = await sanitizeVideoAudioForCopyright(prepared);
-          } catch {
-            youtubeVideoPath = prepared;
-          }
+          setPipelineProgress(jobId, 'Đang chuẩn hóa khung dọc 9:16 và thời lượng YouTube Shorts, giữ âm thanh gốc…');
+          youtubeVideoPath = await prepareYouTubeShortVideo(videoPath, path.join(outputDir, 'youtube_short.mp4'));
         }
 
         if (post.coverUrl) {
@@ -803,14 +809,10 @@ const server = http.createServer(async (req, res) => {
                 setPipelineProgress(jobId, 'Đang ghép Reel cho Instagram và Facebook…');
                 console.log('[Instagram] Đang tạo video Reel 9:16 sạch chữ cho Instagram/Facebook...');
                 await createCinematicReel(localImagePaths, validAudio, reelPath, '', frameCacheDir);
-                try {
-                  const safeReelPath = await sanitizeVideoAudioForCopyright(reelPath);
-                  uploadPaths = [safeReelPath];
-                } catch {
-                  uploadPaths = [reelPath];
-                }
+                uploadPaths = [await sanitizeVideoAudioForCopyright(reelPath)];
               } catch (e) {
                 console.error('Không thể tạo Reel Instagram:', e.message);
+                throw e;
               }
             }
 
@@ -820,9 +822,9 @@ const server = http.createServer(async (req, res) => {
                 throw new Error('Không tải được âm thanh nguồn cho YouTube; chưa đăng video để tránh mất tiếng.');
               }
               setPipelineProgress(jobId, 'Đang dựng YouTube Shorts sạch chữ, zoom mượt theo nhịp nhạc…');
-              const rawYoutubeReel = path.join(outputDir, 'youtube_with_audio.mp4');
+              youtubeVideoPath = path.join(outputDir, 'youtube_with_original_audio.mp4');
               try {
-                await createTikTokSlideshow(localImagePaths, validAudio, rawYoutubeReel, {
+                await createTikTokSlideshow(localImagePaths, validAudio, youtubeVideoPath, {
                   durationSeconds: 15,
                   secondsPerImage: 2.5,
                   zoomAmount: 0.03,
@@ -836,12 +838,7 @@ const server = http.createServer(async (req, res) => {
                   seed: post.photoId || cleanUrl || post.title
                 });
               } catch {
-                await createCinematicReel(localImagePaths.slice(0, 6), validAudio, rawYoutubeReel, '', frameCacheDir);
-              }
-              try {
-                youtubeVideoPath = await sanitizeVideoAudioForCopyright(rawYoutubeReel);
-              } catch {
-                youtubeVideoPath = rawYoutubeReel;
+                await createCinematicReel(localImagePaths.slice(0, 6), validAudio, youtubeVideoPath, '', frameCacheDir, true);
               }
             }
             if (autoPostTikTok) {
@@ -859,12 +856,7 @@ const server = http.createServer(async (req, res) => {
                 };
                 if (!enableMoodQuote) config.sceneTexts = [];
                 await createTikTokSlideshow(localImagePaths, validAudio, tiktokReelPath, config);
-                try {
-                  const safeTikTokReelPath = await sanitizeVideoAudioForCopyright(tiktokReelPath);
-                  targetVideo = safeTikTokReelPath;
-                } catch {
-                  targetVideo = tiktokReelPath;
-                }
+                targetVideo = await sanitizeVideoAudioForCopyright(tiktokReelPath);
               } catch (e) {
                 console.error('Không thể tạo Video TikTok:', e.message);
                 throw e;
@@ -903,10 +895,10 @@ const server = http.createServer(async (req, res) => {
       }
       publishingStarted = true;
       const published = await publishPlatforms(
-        { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads, autoPostX, autoPostYouTube },
+        { autoPostIG, autoPostFB, autoPostTikTok, autoPostThreads, autoPostX, autoPostYouTube, youtubePublishMode },
         { imagePaths: uploadPaths, videoPath: targetVideo, youtubeVideoPath, caption: finalCaption, instagramCaption, tiktokCaption, ...youtubeMetadata, threadsCaption: buildThreadsCaption(finalCaption, captionLang, { prompt: !customCaption?.trim() }) },
-        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: args.caption ?? tiktokCaption }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }), youtube: postToYouTubeShort },
-        message => setPipelineProgress(jobId, message)
+        { instagram: postToInstagram, tiktok: args => postToTikTok({ ...args, caption: args.caption ?? tiktokCaption }), threads: postToThreads, x: args => postToX({ ...args, caption: prepareXCaption(args.caption, { truncate: !customCaption?.trim() }) }), youtube: youtubeUploadQueue.publish },
+        (message, details) => setPipelineProgress(jobId, message, details)
       );
 
       // Keep media when Threads needs a retry, without reposting other platforms.
@@ -943,6 +935,7 @@ const server = http.createServer(async (req, res) => {
         const completedJobId = jobId;
         setTimeout(() => {
           pipelineProgress.delete(completedJobId);
+          pipelinePlatforms.delete(completedJobId);
           pipelineStageStarted.delete(completedJobId);
         }, 60_000).unref();
       }
@@ -957,6 +950,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  if (!THREADS_ONLY && !X_ONLY && !TIKTOK_ONLY) youtubeUploadQueue.start();
   if (!THREADS_ONLY) sheetQueue.start();
   const url = `http://localhost:${PORT}`;
   console.log(`\n==================================================`);
@@ -973,6 +967,8 @@ server.on('error', error => {
   process.exitCode = 1;
 });
 
+server.on('close', () => youtubeUploadQueue.stop());
+
 process.on('uncaughtException', (err) => {
   console.error('Unhandled Exception:', err.message);
 });
@@ -980,4 +976,3 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
 });
-

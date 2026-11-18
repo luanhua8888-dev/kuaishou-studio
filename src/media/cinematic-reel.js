@@ -7,6 +7,7 @@ import { removeDownloadDirectory } from './workspace.js';
 import { cleanPureText } from '../content/caption.js';
 import { pickTransitions } from './transitions.js';
 import { analyzeAudio } from './audio-analysis.js';
+import { youtubeSlideshowTiming, youtubeOpeningTiming, youtubeSceneTransition } from './youtube-short.js';
 
 const execPromise = util.promisify(exec);
 
@@ -122,14 +123,18 @@ export function getImageDimensions(filePath) {
  * with ambient blurred backdrop, full original image framing, silky-smooth crossfade transitions,
  * and optional pure text mood quote overlay (for TikTok only)
  */
-export async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
-  const images = (Array.isArray(imageInput) ? imageInput : [imageInput]).filter(p => fs.existsSync(p)).slice(0, 10);
+export async function createCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null, youtubeEdit = false) {
+  const validImages = (Array.isArray(imageInput) ? imageInput : [imageInput]).filter(p => fs.existsSync(p));
+  const images = youtubeEdit ? validImages : validImages.slice(0, 10);
   return renderWithCache(outputPath, [...images, audioPath && fs.existsSync(audioPath) ? audioPath : null],
-    { moodQuote, renderer: renderCinematicReel.toString() },
-    () => renderCinematicReel(images, audioPath, outputPath, moodQuote, frameCacheDir));
+    { moodQuote, youtubeEdit, youtubeTiming: youtubeEdit ? youtubeSlideshowTiming(images.length) : null,
+      opening: youtubeEdit ? youtubeOpeningTiming(images.length) : null,
+      transitions: youtubeEdit ? images.map((_, i) => youtubeSceneTransition(i)) : null,
+      renderer: renderCinematicReel.toString() },
+    () => renderCinematicReel(images, audioPath, outputPath, moodQuote, frameCacheDir, youtubeEdit));
 }
 
-export async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null) {
+export async function renderCinematicReel(imageInput, audioPath, outputPath, moodQuote = '', frameCacheDir = null, youtubeEdit = false) {
   const images = Array.isArray(imageInput) ? imageInput : [imageInput];
   const validImages = images.filter(p => fs.existsSync(p));
   if (validImages.length === 0) {
@@ -155,7 +160,7 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
 
   try {
     // Take up to 10 images for optimal slideshow pacing
-    const selectedImages = validImages.slice(0, 10);
+    const selectedImages = youtubeEdit ? validImages : validImages.slice(0, 10);
     const numImages = selectedImages.length;
 
     // Chuẩn bị filter chèn chữ tâm trạng tiếng Việt với font Monospaced và nền mờ tối dịu mắt
@@ -230,16 +235,17 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
     }
 
     // Step 2: Build video from framed images
-    const transitionDuration = 0.65; // slightly quicker, smooth crossfade in seconds
+    const youtubeTiming = youtubeEdit ? youtubeSlideshowTiming(numImages) : null;
+    const transitionDuration = youtubeTiming?.transitionDuration ?? 0.65;
 
     if (numImages === 1) {
       console.log('[Reel] Tạo video từ 1 hình ảnh chất lượng cao chuẩn HD 30fps...');
-      const totalDur = audioDuration ? Math.min(Math.max(audioDuration, 6), 30) : 10;
+      const totalDur = youtubeTiming?.totalDuration ?? (audioDuration ? Math.min(Math.max(audioDuration, 6), 30) : 10);
       const start = await musicStart(audioPath, totalDur);
       const audioInput = (audioPath && fs.existsSync(audioPath))
         ? `${start > 0 ? `-ss ${start} ` : ''}-i "${audioPath}"`
         : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
-      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+      const cmd = `ffmpeg -y -threads 0 -framerate 30 -loop 1 -t ${totalDur.toFixed(2)} -i "${framedImages[0]}" ${audioInput} ${youtubeEdit ? `-af apad -t ${totalDur.toFixed(2)}` : ''} -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
       await execPromise(cmd);
       return outputPath;
     }
@@ -250,34 +256,50 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
       slideDuration = Math.max(2.4, Math.min(3.2, slideDuration)) * 0.9;
     }
 
-    const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration;
+    if (youtubeTiming) slideDuration = youtubeTiming.slideDuration;
+    const opening = youtubeEdit ? youtubeOpeningTiming(numImages) : null;
+    const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration + (opening?.totalDuration || 0);
     console.log(`[Reel] Tạo video chuyển cảnh mượt mà chuẩn 30fps (xfade ${transitionDuration}s, mỗi ảnh ${slideDuration.toFixed(2)}s, tổng ${totalVideoDur.toFixed(2)}s)...`);
 
-    // One short extra input of the first image closes the loop: the end dissolves into the start.
+    // One short extra input of the first image closes the loop when not using youtubeEdit.
     const inputs = [...framedImages.map(f => `-framerate 30 -loop 1 -t ${slideDuration.toFixed(2)} -i "${f}"`),
-      `-framerate 30 -loop 1 -t ${transitionDuration.toFixed(2)} -i "${framedImages[0]}"`].join(' ');
+      ...(youtubeEdit ? [] : [`-framerate 30 -loop 1 -t ${transitionDuration.toFixed(2)} -i "${framedImages[0]}"`])].join(' ');
+    const audioInputIndex = youtubeEdit ? framedImages.length : framedImages.length + 1;
 
     let filterGraph = '';
-    let lastOut = '0:v';
+    if (youtubeEdit) {
+      for (let i = 0; i < numImages; i++) {
+        filterGraph += `[${i}:v]setsar=1,split=2[fast${i}][photo${i}];`;
+        filterGraph += `[fast${i}]trim=end_frame=${opening.framesPerImage},setpts=PTS-STARTPTS[preview${i}];`;
+      }
+      filterGraph += framedImages.map((_, i) => `[preview${i}]`).join('') + `concat=n=${numImages}:v=1:a=0[opening];`;
+    }
+    let lastOut = youtubeEdit ? 'photo0' : '0:v';
     let currentOffset = slideDuration - transitionDuration;
 
     // No fade to black at the end: the last scene dissolves back to the first for a seamless replay.
     const transitions = pickTransitions(framedImages.length - 1, selectedImages.map(file => path.basename(file)).join('|'));
     for (let i = 1; i < framedImages.length; i++) {
       const nextOut = i === framedImages.length - 1 ? 'vxfade' : `v${i}`;
-      filterGraph += `[${lastOut}][${i}:v]xfade=transition=${transitions[i - 1]}:duration=${transitionDuration.toFixed(2)}:offset=${currentOffset.toFixed(2)}[${nextOut}];`;
+      const source = youtubeEdit ? `photo${i}` : `${i}:v`;
+      filterGraph += `[${lastOut}][${source}]xfade=transition=${youtubeEdit ? youtubeSceneTransition(i) : transitions[i - 1]}:duration=${transitionDuration.toFixed(2)}:offset=${currentOffset.toFixed(2)}[${nextOut}];`;
       lastOut = nextOut;
       currentOffset += (slideDuration - transitionDuration);
     }
 
-    filterGraph += `[${lastOut}][${framedImages.length}:v]xfade=transition=fade:duration=${transitionDuration.toFixed(2)}:offset=${(totalVideoDur - transitionDuration).toFixed(2)}[vfinal]`;
+    filterGraph += youtubeEdit
+      ? `[opening][${lastOut}]concat=n=2:v=1:a=0[vfinal]`
+      : `[${lastOut}][${framedImages.length}:v]xfade=transition=fade:duration=${transitionDuration.toFixed(2)}:offset=${(totalVideoDur - transitionDuration).toFixed(2)}[vfinal]`;
 
     const start = await musicStart(audioPath, totalVideoDur);
     const audioInput = (audioPath && fs.existsSync(audioPath))
       ? `${start > 0 ? `-ss ${start} ` : ''}-i "${audioPath}"`
       : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
 
-    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length + 1}:a -af "afade=t=in:d=0.05,afade=t=out:st=${(totalVideoDur - transitionDuration).toFixed(2)}:d=${transitionDuration.toFixed(2)}" -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+    const audioFilter = youtubeEdit
+      ? `-af apad -t ${totalVideoDur.toFixed(2)}`
+      : `-af "afade=t=in:d=0.05,afade=t=out:st=${(totalVideoDur - transitionDuration).toFixed(2)}:d=${transitionDuration.toFixed(2)}"`;
+    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${audioInputIndex}:a ${audioFilter} -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
     await execPromise(encodeCmd);
 
     console.log('[Reel] Hoàn tất tạo video chất lượng cao!');

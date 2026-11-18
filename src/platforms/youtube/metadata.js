@@ -1,6 +1,9 @@
 import { relevantHashtags } from '../../content/relevance-tags.js';
 import { resolveGeminiApiKey, callGeminiApi } from '../../content/ai-story.js';
 
+// Editorial target, not a YouTube ranking threshold. Keep hashtags out of the headline.
+export const YOUTUBE_TITLE_TARGET = 50;
+
 const GENERIC_TAGS = new Set(['#moments', '#storytelling', '#sharing', '#perspective', '#creativecontent']);
 const YT_FALLBACK_TAGS = ['#slowliving', '#peaceful', '#scenery', '#calm', '#aesthetic'];
 const EXTRA_YT_CUES = [
@@ -10,8 +13,12 @@ const EXTRA_YT_CUES = [
   [/\b(?:cloud|clouds|sky|mist|fog|light)\b|云|天空|晨雾|光影/iu, ['#sky', '#aesthetic']]
 ];
 
+export function cleanYouTubeText(value) {
+  return String(value ?? '').toWellFormed().replace(/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+}
+
 export function cleanYouTubeLine(input) {
-  return String(input || '')
+  return cleanYouTubeText(input)
     .replace(/^(?:shot on\s+)?(?:honor|xiaomi|redmi|vivo|oppo|huawei|iphone|samsung|oneplus|sony|leica|canon|nikon|fujifilm)[^|｜\n]{0,35}[|｜]\s*/iu, '')
     .replace(/the country of tourism\s*(?:—|-|_)+\s*([\p{L}\s]+)/iu, (_, place) => `Exploring ${place.trim()}`)
     .replace(/[—–]{2,}/g, ' - ')
@@ -28,12 +35,27 @@ export function cleanYouTubeLine(input) {
     .trim();
 }
 
-function shortenOnWordBoundary(text, maxChars) {
-  const chars = Array.from(text);
-  if (chars.length <= maxChars) return text.trim();
-  const sliced = chars.slice(0, maxChars).join('');
-  const trimmed = sliced.replace(/\s+\S*$/, '').replace(/[,;:\-–—\s]+$/, '').trim();
-  return trimmed || sliced.trim();
+export function truncateYouTubeBytes(value, budget = 5000) {
+  let text = '';
+  let bytes = 0;
+  for (const character of value) {
+    bytes += Buffer.byteLength(character, 'utf8');
+    if (bytes > budget) break;
+    text += character;
+  }
+  return text;
+}
+
+function shortHeading(text) {
+  if (text.length <= YOUTUBE_TITLE_TARGET) return text;
+  let prefix = '';
+  for (const character of text) {
+    if (prefix.length + character.length > YOUTUBE_TITLE_TARGET - 1) break;
+    prefix += character;
+  }
+  const boundary = prefix.lastIndexOf(' ');
+  if (!/\s$/u.test(prefix) && !/\s/u.test(text[prefix.length] || '') && boundary >= YOUTUBE_TITLE_TARGET / 2) prefix = prefix.slice(0, boundary);
+  return prefix.trimEnd().replace(/[,;:\-–—]+$/u, '').trimEnd() + '…';
 }
 
 export function youtubeHashtags(context = '') {
@@ -49,33 +71,33 @@ export function youtubeHashtags(context = '') {
       unique.push(tag);
     }
   }
-  return [unique[0], unique[1], '#shorts', unique[2], unique[3]].filter(Boolean).join(' ');
+  return ['#shorts', unique[0], unique[1]].filter(Boolean).join(' ');
 }
 
-// Keep a readable title with a small set of complete hashtags within 100 characters.
 export function buildYouTubeMetadata(caption, { description = '', language = 'en', callToAction = '' } = {}) {
-  const text = String(caption || '');
-  const tags = [...new Set(text.match(/#[\p{L}\p{N}_]+/gu) || [])].slice(0, 3);
+  const text = cleanYouTubeText(caption);
+  const seen = new Set();
+  const tags = (text.match(/#[\p{L}\p{N}_]+/gu) || []).filter(tag => {
+    const key = tag.toLowerCase();
+    if (seen.has(key) || tag.length > 40) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 3);
   const lines = text.replace(/#[\p{L}\p{N}_]+/gu, '').split(/\r?\n/).map(cleanYouTubeLine).filter(Boolean);
-  // Drop overly long tags rather than cutting a hashtag in half.
-  while (tags.join(' ').length > 50) tags.pop();
-  const hashtags = tags.length ? ` ${tags.join(' ')}` : '';
+  const hashtags = tags.length ? `\n\n${tags.join(' ')}` : '';
   const heading = lines[0] || (language === 'vi' ? 'Khoảnh khắc đáng nhớ' : 'A peaceful moment');
-  const title = shortenOnWordBoundary(heading, Math.max(20, 100 - hashtags.length)) + hashtags;
-  const details = cleanYouTubeLine(String(description).replace(/#[\p{L}\p{N}_]+/gu, ''));
+  const title = shortHeading(heading);
+  const details = cleanYouTubeLine(cleanYouTubeText(description).replace(/#[\p{L}\p{N}_]+/gu, ''));
   const fallback = language === 'vi'
     ? `Video ngắn ghi lại: ${heading}.`
     : `A quiet moment captured on camera: ${heading}.`;
   const body = details && details !== heading ? details : lines.slice(1).join('\n') || fallback;
-  // Description hashtags appear above the title on YouTube; the follow line comes before them.
-  const allTagList = [...new Set(text.match(/#[\p{L}\p{N}_]+/gu) || [])].slice(0, 5);
-  const allTags = allTagList.join(' ');
-  const youtubeTags = [...new Set(allTagList.map(t => t.slice(1).toLowerCase()))];
-  return {
-    youtubeTitle: title,
-    youtubeDescription: [body, callToAction, allTags].filter(Boolean).join('\n\n').slice(0, 5000),
-    youtubeTags
-  };
+  const suffix = [callToAction, hashtags.trim()].filter(Boolean).join('\n\n');
+  const ending = suffix ? '\n\n' + suffix : '';
+  const budget = 5000 - Buffer.byteLength(ending, 'utf8');
+  const shortened = truncateYouTubeBytes(body, budget);
+  const youtubeTags = [...new Set(tags.map(t => t.slice(1).toLowerCase()))];
+  return { youtubeTitle: title, youtubeDescription: shortened.trimEnd() + ending, youtubeTags };
 }
 
 export async function polishYouTubeMetadata({ rawTitle = '', englishCaption = '', englishDescription = '', callToAction = '', apiKey } = {}) {
@@ -88,7 +110,7 @@ export async function polishYouTubeMetadata({ rawTitle = '', englishCaption = ''
     const prompt = `Write metadata for a calm, aesthetic YouTube Short (scenery / slow living / peaceful daily life).
 Source caption: "${rawTitle || heading}"
 Literal translation: "${heading}"
-Return ONLY JSON: {"title": "<natural, evocative English hook under 56 chars, no quotes, no hashtags, no clickbait>", "description": "<1-2 warm sentences plus 1 short gentle question inviting viewers to share in comments, no hashtags>"}`;
+Return ONLY JSON: {"title": "<natural, evocative English hook under 48 chars, no quotes, no hashtags, no clickbait>", "description": "<1-2 warm sentences plus 1 short gentle question inviting viewers to share in comments, no hashtags>"}`;
     for (const model of ['gemini-2.5-flash', 'gemini-2.0-flash']) {
       try {
         const raw = await callGeminiApi({ prompt, apiKey: key, model, timeoutMs: 10000 });

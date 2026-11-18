@@ -28,6 +28,6 @@ test('settings can turn the follow line off or replace its text', t => {
 
 test('YouTube description carries the subscribe line and the hashtags', () => {
   const meta = buildYouTubeMetadata('Quiet evening\n#nature #calm', { description: 'A calm sunset.', callToAction: 'Subscribe for more.' });
-  assert.equal(meta.youtubeTitle, 'Quiet evening #nature #calm');
+  assert.equal(meta.youtubeTitle, 'Quiet evening');
   assert.equal(meta.youtubeDescription, 'A calm sunset.\n\nSubscribe for more.\n\n#nature #calm');
 });

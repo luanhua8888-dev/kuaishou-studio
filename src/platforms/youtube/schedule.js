@@ -4,8 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { QUEUE_DIR } from '../../paths.js';
 
 // Up to three prime global English windows per UTC day; empty windows stay empty.
-// Spaced 6-11h apart so each Short gets a full seed-testing runway on new channels.
+// Spaced >= 5h apart so each Short gets a full seed-testing runway on new channels.
 export const YOUTUBE_UTC_HOURS = [2, 13, 20];
+export const YOUTUBE_MIN_SPACING_MS = 5 * 60 * 60 * 1000;
+
 export function nextYouTubeSlot(now, reservations = []) {
   const earliest = now + 60 * 60 * 1000; // Upload/processing lead time.
   const last = Math.max(0, ...reservations.map(item => Date.parse(item.publishAt)));
@@ -14,8 +16,8 @@ export function nextYouTubeSlot(now, reservations = []) {
   for (let day = 0; day < 370; day++) {
     for (const hour of YOUTUBE_UTC_HOURS) {
       const candidate = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + day, hour);
-      // Also protect spacing when upgrading from the previous four-slot schedule.
-      if (candidate >= earliest && candidate >= last + 2 * 60 * 60 * 1000) return new Date(candidate).toISOString();
+      // Respect reservations made under earlier schedules as well.
+      if (candidate >= earliest && candidate >= last + YOUTUBE_MIN_SPACING_MS) return new Date(candidate).toISOString();
     }
   }
   throw new Error('Không tìm được lịch YouTube phù hợp');

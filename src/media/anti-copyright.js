@@ -1,77 +1,39 @@
-import fs from 'fs';
-import path from 'path';
-import { exec } from 'child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
 
-const inFlightJobs = new Map();
+const run = promisify(execFile);
+const inFlight = new Map();
 
-/**
- * Tự động xử lý âm thanh video để lách thuật toán quét bản quyền tự động (Content ID / Meta Rights Manager)
- * - Sử dụng pitch shift nhẹ (+4.5%) qua rubberband/asetrate để làm biến dạng vân âm thanh (acoustic fingerprint)
- * - Giữ nguyên 100% hình ảnh gốc (-c:v copy), xử lý siêu nhanh (< 0.5s), không mất chất lượng
- * - Giữ nguyên thời lượng, đồng bộ 100% hình và tiếng
- */
-export async function sanitizeVideoAudioForCopyright(videoPath) {
-  if (!videoPath || !fs.existsSync(videoPath)) return videoPath;
-
-  const ext = path.extname(videoPath).toLowerCase();
-  if (ext !== '.mp4' && ext !== '.mov') return videoPath;
-  if (videoPath.includes('_safe.mp4')) return videoPath;
-
-  const safeVideoPath = videoPath.replace(/\.[^.]+$/, '') + '_safe.mp4';
-  if (fs.existsSync(safeVideoPath) && fs.statSync(safeVideoPath).size > 0) {
-    return safeVideoPath;
-  }
-
-  if (inFlightJobs.has(safeVideoPath)) {
-    return inFlightJobs.get(safeVideoPath);
-  }
-
+// Legacy name: remove unverified source audio, never alter fingerprints.
+// This does not grant rights to the remaining images or video.
+export async function sanitizeVideoAudioForCopyright(videoPath, { runImpl = run } = {}) {
+  if (!videoPath || !fs.existsSync(videoPath)) throw new Error('Không tìm thấy video để loại âm thanh nguồn.');
+  const source = path.resolve(videoPath);
+  if (inFlight.has(source)) return inFlight.get(source);
   const job = (async () => {
-    const tempSafePath = `${safeVideoPath}.${Date.now()}_${Math.random().toString(36).slice(2)}.tmp.mp4`;
+    const probe = async file => {
+      const { stdout } = await runImpl('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'json', file]);
+      const streams = JSON.parse(stdout).streams;
+      if (!Array.isArray(streams) || !streams.some(s => s.codec_type === 'video')) throw new Error('Video không hợp lệ.');
+      return streams.some(s => s.codec_type === 'audio');
+    };
+    if (!await probe(source)) return videoPath;
+    // Old *_safe files may still contain pitch-shifted music. Never trust them.
+    const output = path.join(path.dirname(source), `${path.parse(source).name}_no_source_audio_${randomUUID()}.mp4`);
     try {
-      const { stdout: hasAudio } = await new Promise((resolve) => {
-        exec(`ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "${videoPath}"`, (err, stdout) => {
-          resolve({ stdout: stdout || '' });
-        });
-      });
-
-      if (!hasAudio || !hasAudio.trim()) {
-        return videoPath;
-      }
-
-      console.log(`[Bản quyền] Đang áp dụng bộ lọc lách bản quyền âm thanh (pitch shift +4.5%) cho: ${path.basename(videoPath)}...`);
-      await new Promise((resolve, reject) => {
-        exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "rubberband=pitch=1.045" -c:a aac -b:a 192k -avoid_negative_ts make_zero -movflags +faststart "${tempSafePath}"`, (err) => {
-          if (err) {
-            exec(`ffmpeg -y -i "${videoPath}" -c:v copy -af "asetrate=44100*1.045,aresample=44100,atempo=1/1.045" -c:a aac -b:a 192k -avoid_negative_ts make_zero -movflags +faststart "${tempSafePath}"`, (err2) => {
-              if (err2) reject(err2);
-              else resolve();
-            });
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (fs.existsSync(tempSafePath) && fs.statSync(tempSafePath).size > 0) {
-        fs.renameSync(tempSafePath, safeVideoPath);
-        console.log(`[Bản quyền] Xử lý âm thanh thành công! Video an toàn: ${path.basename(safeVideoPath)}`);
-        return safeVideoPath;
-      }
-      return videoPath;
-    } catch (err) {
-      if (fs.existsSync(tempSafePath)) {
-        try { fs.unlinkSync(tempSafePath); } catch {}
-      }
-      console.warn(`[Bản quyền] Không thể xử lý âm thanh lách bản quyền, giữ nguyên gốc: ${err.message}`);
-      return videoPath;
+      await runImpl('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', source,
+        '-map', '0:v:0', '-c:v', 'copy', '-an', '-sn', '-dn', '-map_metadata', '-1', '-movflags', '+faststart', output],
+      { timeout: 10 * 60 * 1000, maxBuffer: 1024 * 1024 });
+      if (!fs.statSync(output).size || await probe(output)) throw new Error('Không xác nhận được việc loại âm thanh nguồn.');
+      return output;
+    } catch (error) {
+      fs.rmSync(output, { force: true });
+      throw new Error(`Dừng đăng: không loại được âm thanh nguồn. ${error.message}`);
     }
   })();
-
-  inFlightJobs.set(safeVideoPath, job);
-  try {
-    return await job;
-  } finally {
-    inFlightJobs.delete(safeVideoPath);
-  }
+  inFlight.set(source, job);
+  try { return await job; } finally { inFlight.delete(source); }
 }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { AUTH_DIR, PROJECT_ROOT } from '../../paths.js';
 
 const authFile = path.join(AUTH_DIR, 'youtube_auth.json');
@@ -28,6 +28,11 @@ async function exchange(fields) {
 }
 
 export const youtubeOAuth = {
+  queueAccountKey() {
+    const auth = readAuth();
+    // Bind delayed uploads to the original authorization, never another channel.
+    return auth.refresh_token ? createHash('sha256').update(auth.refresh_token).digest('hex') : null;
+  },
   status() {
     const auth = readAuth();
     return { configured: Boolean(client.client_id && client.client_secret), connected: Boolean(auth.refresh_token), channel: auth.channel || null, redirectUri: callbackUri };
