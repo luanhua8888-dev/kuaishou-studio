@@ -1,27 +1,51 @@
 import fs from 'node:fs';
 import { youtubeOAuth } from './oauth.js';
 import { createYouTubeThumbnail, applyYouTubeThumbnail } from './thumbnail.js';
-import { reserveYouTubeSlot, scheduledYouTubeStatus } from './schedule.js';
+import { reserveYouTubeSlot, releaseYouTubeSlot, scheduledYouTubeStatus } from './schedule.js';
 
-export async function postToYouTubeShort({ videoPath, title, description = '', onProgress = () => {} }) {
+export async function postToYouTubeShort({ videoPath, title, description = '', tags = [], onProgress = () => {} }) {
   if (!videoPath || !fs.existsSync(videoPath)) throw new Error('Không tìm thấy video để tải lên YouTube Shorts.');
   const stat = fs.statSync(videoPath);
   if (!stat.size) throw new Error('Video YouTube Shorts rỗng.');
   const token = await youtubeOAuth.accessToken();
   const safeTitle = String(title || 'Video mới').trim().slice(0, 100);
-  const { publishAt } = reserveYouTubeSlot();
+  const cleanTags = Array.isArray(tags) ? tags.map(t => String(t).replace(/^#/, '').trim()).filter(Boolean).slice(0, 15) : [];
+  const { id: slotId, publishAt } = reserveYouTubeSlot();
   onProgress(`Đang tải YouTube và hẹn công khai: ${publishAt} (UTC)…`);
-  const metadata = { snippet: { title: safeTitle, description: String(description).slice(0, 5000), categoryId: '22' }, status: scheduledYouTubeStatus(publishAt) };
+  const metadata = {
+    snippet: {
+      title: safeTitle,
+      description: String(description).slice(0, 5000),
+      categoryId: '19',
+      defaultLanguage: 'en',
+      ...(cleanTags.length ? { tags: cleanTags } : {})
+    },
+    status: scheduledYouTubeStatus(publishAt)
+  };
   let init;
   try {
     init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(stat.size), 'X-Upload-Content-Type': 'video/mp4' },
       body: JSON.stringify(metadata), signal: AbortSignal.timeout(30000), redirect: 'error'
     });
-  } catch { throw new Error('Không bắt đầu được lượt tải YouTube. Kiểm tra YouTube Studio trước khi thử lại.'); }
-  if (!init.ok) throw new Error(`YouTube từ chối tạo video (${init.status}). Kiểm tra quyền tải video, API và trạng thái kênh.`);
+  } catch {
+    releaseYouTubeSlot(slotId);
+    throw new Error('Không bắt đầu được lượt tải YouTube. Kiểm tra YouTube Studio trước khi thử lại.');
+  }
+  if (!init.ok) {
+    releaseYouTubeSlot(slotId);
+    const errBody = await init.json().catch(() => ({}));
+    const reason = errBody?.error?.errors?.[0]?.reason || '';
+    if (reason === 'quotaExceeded' || reason === 'uploadLimitExceeded') {
+      throw new Error(`Đã đạt giới hạn tải YouTube trong ngày (${reason} - mặc định Google Cloud cho phép ~6 video/ngày). Chờ qua ngày mới hoặc xin nâng quota.`);
+    }
+    throw new Error(`YouTube từ chối tạo video (${init.status}). Kiểm tra quyền tải video, API và trạng thái kênh.`);
+  }
   const uploadUrl = init.headers.get('location');
-  if (!uploadUrl || new URL(uploadUrl).origin !== 'https://www.googleapis.com') throw new Error('YouTube không trả URL tải lên an toàn.');
+  if (!uploadUrl || new URL(uploadUrl).origin !== 'https://www.googleapis.com') {
+    releaseYouTubeSlot(slotId);
+    throw new Error('YouTube không trả URL tải lên an toàn.');
+  }
   onProgress('Đang tải video lên YouTube…');
   const bytes = await fs.promises.readFile(videoPath);
   let response;

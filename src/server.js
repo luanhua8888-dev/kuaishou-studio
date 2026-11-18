@@ -28,7 +28,8 @@ import { createTikTokSlideshow, readTikTokSlideshowConfig } from './media/tiktok
 import { sanitizeVideoAudioForCopyright } from './media/anti-copyright.js';
 import { youtubeOAuth } from './platforms/youtube/oauth.js';
 import { postToYouTubeShort } from './platforms/youtube/poster.js';
-import { buildYouTubeMetadata } from './platforms/youtube/metadata.js';
+import { polishYouTubeMetadata } from './platforms/youtube/metadata.js';
+import { prepareYouTubeShortVideo } from './platforms/youtube/video.js';
 
 const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7) || 3000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Cổng server không hợp lệ.');
@@ -747,8 +748,6 @@ const server = http.createServer(async (req, res) => {
         });
         uploadPaths = [videoPath];
         targetVideo = videoPath;
-        // Keep YouTube separate from TikTok's processed/captioned version.
-        youtubeVideoPath = videoPath;
 
         try {
           setPipelineProgress(jobId, 'Đang tối ưu âm thanh bản quyền cho video…');
@@ -759,6 +758,16 @@ const server = http.createServer(async (req, res) => {
           }
         } catch (sanitizeErr) {
           console.warn('[Server] Không thể xử lý lách bản quyền video, sử dụng file gốc:', sanitizeErr.message);
+        }
+
+        if (autoPostYouTube) {
+          setPipelineProgress(jobId, 'Đang chuẩn hóa khung dọc 9:16 và thời lượng YouTube Shorts…');
+          const prepared = await prepareYouTubeShortVideo(videoPath, path.join(outputDir, 'youtube_short.mp4'));
+          try {
+            youtubeVideoPath = await sanitizeVideoAudioForCopyright(prepared);
+          } catch {
+            youtubeVideoPath = prepared;
+          }
         }
 
         if (post.coverUrl) {
@@ -783,7 +792,8 @@ const server = http.createServer(async (req, res) => {
         const tiktokReelPath = path.join(outputDir, 'tiktok_reel.mp4');
         const frameCacheDir = path.join(outputDir, `temp_frames_${Date.now()}`);
         const shouldRunIG = Boolean(autoPostIG || autoPostFB);
-        const shouldCreateCleanReel = asReel !== false && (shouldRunIG || autoPostThreads || !autoPostTikTok || autoPostYouTube);
+        const noPlatformSelected = !shouldRunIG && !autoPostThreads && !autoPostTikTok && !autoPostX && !autoPostYouTube;
+        const shouldCreateCleanReel = asReel !== false && (shouldRunIG || autoPostThreads || noPlatformSelected);
 
         try {
           if (localImagePaths.length > 0) {
@@ -809,9 +819,30 @@ const server = http.createServer(async (req, res) => {
               if (post.musicUrl && !validAudio) {
                 throw new Error('Không tải được âm thanh nguồn cho YouTube; chưa đăng video để tránh mất tiếng.');
               }
-              setPipelineProgress(jobId, 'Đang tạo video YouTube không chèn chữ, giữ âm thanh nguồn…');
-              youtubeVideoPath = path.join(outputDir, 'youtube_with_audio.mp4');
-              await createCinematicReel(localImagePaths, validAudio, youtubeVideoPath, '', frameCacheDir);
+              setPipelineProgress(jobId, 'Đang dựng YouTube Shorts sạch chữ, zoom mượt theo nhịp nhạc…');
+              const rawYoutubeReel = path.join(outputDir, 'youtube_with_audio.mp4');
+              try {
+                await createTikTokSlideshow(localImagePaths, validAudio, rawYoutubeReel, {
+                  durationSeconds: 15,
+                  secondsPerImage: 2.5,
+                  zoomAmount: 0.03,
+                  sceneTexts: [],
+                  beatSync: true,
+                  loop: true,
+                  imageOrder: undefined,
+                  heroImageIndex: undefined,
+                  text: { style: 'editorial' },
+                  audio: { volume: 1, fadeSeconds: 0.45, startAt: 'auto' },
+                  seed: post.photoId || cleanUrl || post.title
+                });
+              } catch {
+                await createCinematicReel(localImagePaths.slice(0, 6), validAudio, rawYoutubeReel, '', frameCacheDir);
+              }
+              try {
+                youtubeVideoPath = await sanitizeVideoAudioForCopyright(rawYoutubeReel);
+              } catch {
+                youtubeVideoPath = rawYoutubeReel;
+              }
             }
             if (autoPostTikTok) {
               try {
@@ -857,12 +888,18 @@ const server = http.createServer(async (req, res) => {
 
       let youtubeMetadata = {};
       if (autoPostYouTube) {
-        const source = finalCaption.replace(/#[\p{L}\p{N}_]+/gu, '').trim();
+        const rawSource = customCaption?.trim() ? finalCaption : (post.title || finalCaption);
+        const source = rawSource.replace(/#[\p{L}\p{N}_]+/gu, '').trim();
         const [englishCaption, englishDescription] = await Promise.all([
           translateText(source, 'en', true),
           finalMoodQuoteVi ? translateText(finalMoodQuoteVi, 'en', true) : Promise.resolve('')
         ]);
-        youtubeMetadata = buildYouTubeMetadata(`${englishCaption}\n${relevantHashtags(englishCaption, 'en')}`, { description: englishDescription, language: 'en', callToAction: callToAction('youtube', 'en') });
+        youtubeMetadata = await polishYouTubeMetadata({
+          rawTitle: post.title,
+          englishCaption,
+          englishDescription,
+          callToAction: callToAction('youtube', 'en')
+        });
       }
       publishingStarted = true;
       const published = await publishPlatforms(

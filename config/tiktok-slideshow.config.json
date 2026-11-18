@@ -18,5 +18,6 @@
     "fadeSeconds": 0.5,
     "startAt": "auto"
   },
-  "beatSync": true
+  "beatSync": true,
+  "loop": true
 }

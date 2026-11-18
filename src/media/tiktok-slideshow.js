@@ -10,7 +10,7 @@ import { analyzeAudio, snapScenesToBeats } from './audio-analysis.js';
 
 const run = promisify(execFile);
 const FPS = 30;
-const VERSION = 8;
+const VERSION = 9;
 const DEFAULT_STORY = [
   'Nếu được đi trốn một ngày, mình muốn đến đây.',
   'Giữa thiên nhiên, mọi thứ như chậm lại…',
@@ -323,6 +323,9 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
   if (startAt !== 'auto') number(startAt, 0, 0, 600, 'audio.startAt');
   const beatSync = config.beatSync ?? true;
   if (typeof beatSync !== 'boolean') throw new Error('beatSync phải là true hoặc false');
+  // The last frame dissolves back into the first, so an autoplay replay has no visible seam.
+  if (typeof (config.loop ?? true) !== 'boolean') throw new Error('loop phải là true hoặc false');
+  const loop = (config.loop ?? true) && plan.scenes.length > 1;
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const outputDir = path.resolve(path.dirname(outputPath));
   const temp = fs.mkdtempSync(path.join(outputDir, '.tiktok-slideshow-'));
@@ -376,6 +379,21 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         }
         return { index: scene.index, clip };
       });
+      if (loop) {
+        // Built after the scenes so frame-0.png already exists.
+        sceneTasks.push(Promise.all(sceneTasks).then(async () => {
+          const clip = path.join(temp, 'loop.mp4');
+          await run('ffmpeg', [
+            '-hide_banner', '-loglevel', 'error', '-y', '-threads', '0',
+            '-framerate', '30', '-loop', '1', '-i', path.join(temp, 'frame-0.png'),
+            '-frames:v', String(plan.transitionFrames),
+            '-r', '30', '-g', '60', '-keyint_min', '30', '-sc_threshold', '0',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+            clip
+          ], { maxBuffer: 8 * 1024 * 1024 });
+          return { index: timeline.scenes.length, clip };
+        }));
+      }
       const renderedScenes = await Promise.all(sceneTasks);
       renderedScenes.sort((a, b) => a.index - b.index);
       const clips = renderedScenes.map(s => s.clip);
@@ -383,11 +401,14 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       for (const clip of clips) args.push('-i', clip);
       args.push(...(hasAudio ? ['-stream_loop', '-1', ...(audioStart > 0 ? ['-ss', String(audioStart)] : []), '-i', audioPath] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']));
       const filters = clips.map((_, i) => `[${i}:v]settb=1/30,setpts=PTS-STARTPTS,format=yuv420p[v${i}]`);
-      const transitions = pickTransitions(clips.length - 1, config.seed || config.title || outputPath, config.transitionStyle ?? 'mixed');
+      const transitions = pickTransitions(timeline.scenes.length - 1, config.seed || config.title || outputPath, config.transitionStyle ?? 'mixed');
       let last = 'v0';
       for (let i = 1; i < clips.length; i++) {
         const next = `mix${i}`;
-        filters.push(`[${last}][v${i}]xfade=transition=${transitions[i - 1]}:duration=${plan.transitionFrames / FPS}:offset=${timeline.scenes[i].start / FPS}[${next}]`);
+        // The loop dissolve is a plain fade: it should feel like the start again, not a new cut.
+        const name = i < timeline.scenes.length ? transitions[i - 1] : 'fade';
+        const offset = i < timeline.scenes.length ? timeline.scenes[i].start : plan.totalFrames - plan.transitionFrames;
+        filters.push(`[${last}][v${i}]xfade=transition=${name}:duration=${plan.transitionFrames / FPS}:offset=${offset / FPS}[${next}]`);
         last = next;
       }
       const textFilters = [];
@@ -401,7 +422,9 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         const begin = (scene.start + (i ? plan.transitionFrames / 2 : 0)) / FPS;
         let endIndex = i + 1;
         while (endIndex < texts.length && !texts[endIndex]) endIndex++;
-        const end = endIndex === texts.length ? plan.duration : (timeline.scenes[endIndex].start + plan.transitionFrames / 2) / FPS;
+        // With a loop the closing question leaves before the dissolve back to the opening image.
+        const finalEnd = loop ? (plan.totalFrames - plan.transitionFrames) / FPS : plan.duration;
+        const end = endIndex === texts.length ? finalEnd : (timeline.scenes[endIndex].start + plan.transitionFrames / 2) / FPS;
         const enable = `gte(t,${begin})*lt(t,${end})`;
         // Short fades soften scene changes while keeping most of each beat fully readable.
         const fade = Math.min(0.22, (end - begin) / 4);
@@ -441,7 +464,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       });
       const grade = layout.style === 'diary' ? 'eq=saturation=0.80:contrast=1.025:brightness=0.012,colorbalance=rs=0.018:bs=-0.018,noise=alls=2:allf=t,' : '';
       filters.push(`[${last}]${grade}${textFilters.length ? textFilters.join(',') + ',' : ''}fps=30,format=yuv420p[out]`);
-      filters.push(`[${clips.length}:a]volume=${volume},apad,atrim=duration=${plan.duration},asetpts=PTS-STARTPTS${audioFade ? `,afade=t=in:d=${audioFade},afade=t=out:st=${plan.duration - audioFade}:d=${audioFade}` : ''}[audio]`);
+      filters.push(`[${clips.length}:a]volume=${volume},apad,atrim=duration=${plan.duration},asetpts=PTS-STARTPTS${audioFade ? `,afade=t=in:d=${Math.min(audioFade, 0.05)},afade=t=out:st=${plan.duration - audioFade}:d=${audioFade}` : ''}[audio]`);
       const script = path.join(temp, 'filters.txt'); fs.writeFileSync(script, filters.join(';\n'));
       args.push(
         '-threads', '0',
@@ -473,7 +496,7 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
         outputPath
       );
       await run('ffmpeg', args, { maxBuffer: 8 * 1024 * 1024 });
-      fs.writeFileSync(`${outputPath}.story.json`, JSON.stringify({ ...timeline, audioStart, order, sourceImages: selected, captions: layout.layouts, config }, null, 2));
+      fs.writeFileSync(`${outputPath}.story.json`, JSON.stringify({ ...timeline, loop, audioStart, order, sourceImages: selected, captions: layout.layouts, config }, null, 2));
     });
   } finally {
     // A unique renderer-owned directory, never source images or shared caches.

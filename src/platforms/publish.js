@@ -81,7 +81,7 @@ export async function publishPlatforms(options, media, posters, progress = () =>
       progress('Đang tải video lên YouTube Shorts…');
       try {
         if (!media.youtubeVideoPath) throw new Error('Không có video riêng cho YouTube; không dùng bản TikTok có chữ');
-        const posted = await posters.youtube({ videoPath: media.youtubeVideoPath, title: media.youtubeTitle ?? media.caption, description: media.youtubeDescription ?? media.caption, onProgress: progress });
+        const posted = await posters.youtube({ videoPath: media.youtubeVideoPath, title: media.youtubeTitle ?? media.caption, description: media.youtubeDescription ?? media.caption, tags: media.youtubeTags, onProgress: progress });
         if (!posted?.success) throw new Error(posted?.message || 'YouTube chưa xác nhận tải video thành công');
         result.youtubePosted = true;
         result.youtubeUrl = posted.url;

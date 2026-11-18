@@ -3,9 +3,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { QUEUE_DIR } from '../../paths.js';
 
-// Up to eight demand-driven windows per UTC day; empty windows stay empty.
-// A broad EU/US experiment, not an anti-spam or recommendation guarantee.
-export const YOUTUBE_UTC_HOURS = [1, 4, 7, 10, 13, 16, 19, 22];
+// Up to three prime global English windows per UTC day; empty windows stay empty.
+// Spaced 6-11h apart so each Short gets a full seed-testing runway on new channels.
+export const YOUTUBE_UTC_HOURS = [2, 13, 20];
 export function nextYouTubeSlot(now, reservations = []) {
   const earliest = now + 60 * 60 * 1000; // Upload/processing lead time.
   const last = Math.max(0, ...reservations.map(item => Date.parse(item.publishAt)));
@@ -37,6 +37,22 @@ export function reserveYouTubeSlot({ statePath = path.join(QUEUE_DIR, 'youtube-s
   } finally {
     fs.closeSync(fd);
     fs.unlinkSync(lock);
+  }
+}
+
+export function releaseYouTubeSlot(id, { statePath = path.join(QUEUE_DIR, 'youtube-schedule.json') } = {}) {
+  if (!id || !fs.existsSync(statePath)) return;
+  const lock = `${statePath}.lock`;
+  let fd;
+  try { fd = fs.openSync(lock, 'wx'); } catch { return; }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    if (!Array.isArray(parsed.entries)) return;
+    fs.writeFileSync(`${statePath}.tmp`, JSON.stringify({ ...parsed, entries: parsed.entries.filter(item => item.id !== id) }, null, 2));
+    fs.renameSync(`${statePath}.tmp`, statePath);
+  } catch {} finally {
+    fs.closeSync(fd);
+    try { fs.unlinkSync(lock); } catch {}
   }
 }
 

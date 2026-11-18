@@ -96,6 +96,8 @@ Ví dụ bốn câu và caption bạn cung cấp nằm trong `config/examples/ti
 node scripts/cli/render-tiktok-sample.mjs "downloads/thu-muc-anh" "config/examples/tiktok-slideshow.norway.example.json" "data/artifacts/tiktok-landscape-sample.mp4"
 ```
 
+Khi không truyền thư mục ảnh, script chọn thư mục con mới nhất trong `downloads/` có ảnh `image_*.jpg/jpeg/png/webp`. Nếu chưa có ảnh, tải một bài ảnh trước hoặc chạy `npm run render:tiktok -- "D:\duong-dan\thu-muc-anh"`. Xem cú pháp bằng `npm run render:tiktok -- --help`.
+
 Lệnh render không đăng bài. Video mẫu và caption nằm trong `data/artifacts/`; khung đầu/giữa/cuối và mọi điểm chuyển cảnh nằm trong `data/artifacts/slideshow-qa/`. Bộ dựng lưu `.story.json` để đối chiếu thứ tự ảnh, thời gian và chữ. Thay cấu hình/ảnh/font làm cache mất hiệu lực. Các thay đổi nhằm cải thiện khả năng đọc và trải nghiệm xem, không bảo đảm lượt xem hoặc khắc phục hạn chế phân phối.
 
 Tool tải video và ảnh chất lượng gốc từ link chia sẻ Kuaishou (QuickWorker / 快手), hoàn toàn không dính logo watermark, tự động đăng lên Instagram, TikTok, Facebook.

@@ -253,13 +253,15 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
     const totalVideoDur = numImages * slideDuration - (numImages - 1) * transitionDuration;
     console.log(`[Reel] Tạo video chuyển cảnh mượt mà chuẩn 30fps (xfade ${transitionDuration}s, mỗi ảnh ${slideDuration.toFixed(2)}s, tổng ${totalVideoDur.toFixed(2)}s)...`);
 
-    const inputs = framedImages.map(f => `-framerate 30 -loop 1 -t ${slideDuration.toFixed(2)} -i "${f}"`).join(' ');
+    // One short extra input of the first image closes the loop: the end dissolves into the start.
+    const inputs = [...framedImages.map(f => `-framerate 30 -loop 1 -t ${slideDuration.toFixed(2)} -i "${f}"`),
+      `-framerate 30 -loop 1 -t ${transitionDuration.toFixed(2)} -i "${framedImages[0]}"`].join(' ');
 
     let filterGraph = '';
     let lastOut = '0:v';
     let currentOffset = slideDuration - transitionDuration;
 
-    // No fade to black at the end: the last scene loops straight back to the first.
+    // No fade to black at the end: the last scene dissolves back to the first for a seamless replay.
     const transitions = pickTransitions(framedImages.length - 1, selectedImages.map(file => path.basename(file)).join('|'));
     for (let i = 1; i < framedImages.length; i++) {
       const nextOut = i === framedImages.length - 1 ? 'vxfade' : `v${i}`;
@@ -268,14 +270,14 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
       currentOffset += (slideDuration - transitionDuration);
     }
 
-    filterGraph += `[${lastOut}]null[vfinal]`;
+    filterGraph += `[${lastOut}][${framedImages.length}:v]xfade=transition=fade:duration=${transitionDuration.toFixed(2)}:offset=${(totalVideoDur - transitionDuration).toFixed(2)}[vfinal]`;
 
     const start = await musicStart(audioPath, totalVideoDur);
     const audioInput = (audioPath && fs.existsSync(audioPath))
       ? `${start > 0 ? `-ss ${start} ` : ''}-i "${audioPath}"`
       : '-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100';
 
-    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length}:a -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
+    const encodeCmd = `ffmpeg -y -threads 0 ${inputs} ${audioInput} -filter_complex "${filterGraph}" -map "[vfinal]" -map ${framedImages.length + 1}:a -af "afade=t=in:d=0.05,afade=t=out:st=${(totalVideoDur - transitionDuration).toFixed(2)}:d=${transitionDuration.toFixed(2)}" -c:v libx264 -preset veryfast -crf 18 -profile:v high -level 4.2 -r 30 -g 60 -keyint_min 30 -sc_threshold 0 -b:v 10M -maxrate 14M -bufsize 20M -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv -movflags +faststart -c:a aac -b:a 256k -ar 44100 -shortest "${outputPath}"`;
     await execPromise(encodeCmd);
 
     console.log('[Reel] Hoàn tất tạo video chất lượng cao!');

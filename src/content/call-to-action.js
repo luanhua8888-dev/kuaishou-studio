@@ -5,7 +5,7 @@ import { SETTINGS_FILE } from '../paths.js';
 const DEFAULTS = {
   tiktok: { vi: 'Follow để xem thêm những khoảnh khắc như thế này mỗi ngày.', en: 'Follow for more moments like this every day.' },
   instagram: { vi: 'Theo dõi để xem thêm những khoảnh khắc như thế này mỗi ngày.', en: 'Follow for more moments like this every day.' },
-  youtube: { vi: 'Đăng ký kênh để xem thêm những khoảnh khắc như thế này mỗi ngày.', en: 'Subscribe for more moments like this every day.' },
+  youtube: { vi: 'Đăng ký kênh để xem thêm những khoảnh khắc bình yên mỗi ngày.', en: 'Subscribe for daily peaceful scenery and slow-living moments.' },
 };
 
 /**
