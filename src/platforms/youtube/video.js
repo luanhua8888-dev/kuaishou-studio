@@ -43,9 +43,7 @@ export async function prepareYouTubeShortVideo(videoPath, outputPath, {
   const targetDur = needsTrim ? maxSeconds : Math.max(1, duration);
   const rawStart = needsTrim ? await highlightStart(videoPath, targetDur) : 0;
   const start = Math.max(0, Math.min(Number(rawStart) || 0, Math.max(0, duration - targetDur)));
-  const vf = needsVertical
-    ? 'split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,boxblur=25:5,eq=brightness=-0.12[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos[fg_fit];[bg_blur][fg_fit]overlay=(W-w)/2:(H-h)/2,setsar=1'
-    : 'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1';
+  const vf = 'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1';
 
   const args = ['-y', '-v', 'error'];
   if (start > 0) args.push('-ss', String(+start.toFixed(2)));

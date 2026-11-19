@@ -10,7 +10,7 @@ import { analyzeAudio, snapScenesToBeats } from './audio-analysis.js';
 
 const run = promisify(execFile);
 const FPS = 30;
-const VERSION = 9;
+const VERSION = 10;
 const DEFAULT_STORY = [
   'Nếu được đi trốn một ngày, mình muốn đến đây.',
   'Giữa thiên nhiên, mọi thứ như chậm lại…',
@@ -315,7 +315,8 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
     return i === 0 || beat !== previous ? (story[beat] || '') : '';
   });
   const layout = await layoutTexts(texts, config.text || {});
-  const zoom = number(config.zoomAmount, 0, 0, 0.04, 'zoomAmount');
+  number(config.zoomAmount, 0, 0, 0.04, 'zoomAmount');
+  const zoom = 0;
   const volume = number(config.audio?.volume, 1.0, 0, 1, 'audio.volume');
   const audioFade = Math.min(plan.duration / 2, number(config.audio?.fadeSeconds, 0.5, 0, 2, 'audio.fadeSeconds'));
   const hasAudio = Boolean(audioPath && fs.existsSync(audioPath));
@@ -347,10 +348,10 @@ export async function createTikTokSlideshow(imageInput, audioPath, outputPath, o
       console.log(`[TikTok Slideshow] Dựng đồng thời ${timeline.scenes.length} cảnh đa luồng…`);
       const sceneTasks = timeline.scenes.map(async scene => {
         const frame = path.join(temp, `frame-${scene.index}.png`);
-        // Only the decorative background is cropped; foreground fits inside motion margins.
-        await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '0', '-i', selected[scene.index], '-filter_complex',
-          '[0:v]split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:3,eq=brightness=-0.15[back];[fg]scale=1000:1760:force_original_aspect_ratio=decrease:flags=lanczos[front];[back][front]overlay=(W-w)/2:(H-h)/2,setsar=1[out]',
-          '-map', '[out]', '-frames:v', '1', frame]);
+        // Full 9:16 framing without shrinking the image into a blurred inset box.
+        await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '0', '-i', selected[scene.index], '-vf',
+          'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1',
+          '-frames:v', '1', frame]);
         const clip = path.join(temp, `scene-${scene.index}.mp4`);
         if (zoom <= 0) {
           await run('ffmpeg', [

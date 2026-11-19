@@ -144,16 +144,18 @@
     .switch-card:last-child { border-bottom: 0; }
     .platform-lead { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .platform-icon { width: 33px; height: 33px; display: grid; place-items: center; border-radius: 10px; color: #fff; flex: none; }
-    .ig-icon { background: #c45d8b; }
-    .fb-icon { background: #4a78cf; }
+    .ig-icon { background: linear-gradient(135deg, #d946ef 0%, #e11d48 55%, #f59e0b 100%); }
+    .fb-icon { background: #2563eb; }
+    .yt-icon { background: #dc2626; }
     .tiktok-icon, .threads-icon, .x-icon { background: #1e293b; border: 1px solid #334155; }
-    .platform-meta { display: flex; flex-direction: column; min-width: 0; }
-    .platform-name { font-size: 11px; font-weight: 800; line-height: 1.4; color: #f1f5f9; }
-    .platform-desc { font-size: 9px; color: #64748b; margin-top: 2px; white-space: nowrap; }
-    .platform-controls { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex: none; }
-    .ig-status-pill { border: 0; background: transparent; color: #94a3b8; padding: 7px 0; display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 500; max-width: 100px; }
+    .platform-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    .platform-name { font-size: 11px; font-weight: 800; line-height: 1.3; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .platform-desc { font-size: 9px; color: #64748b; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .platform-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: none; }
+    .ig-status-pill { border: 0; background: transparent; color: #94a3b8; padding: 4px 0; display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 500; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ig-status-pill span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ig-status-pill:hover { color: #38bdf8; text-decoration: underline; }
+    #youtubePublishMode { width: auto; min-width: 0; height: 22px; padding: 0 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #cbd5e1; font-size: 9.5px; font-weight: 600; cursor: pointer; }
     .dot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; flex: none; }
     .dot-green { background: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.5); }
     .dot-gray { background: #475569; }
@@ -200,7 +202,7 @@
     .sheet-table th:last-child { border-right: none; }
     .sheet-table th.th-num { width: 96px; padding-left: 10px; padding-right: 6px; background: #131b2a; color: #94a3b8; }
     .sheet-table th.th-col-a { background: #132238; color: #7dd3fc; }
-    .sheet-table th.th-col-c { width: 105px; text-align: center; background: #131b2a; color: #94a3b8; }
+    .sheet-table th.th-col-c { width: 124px; text-align: center; background: #131b2a; color: #94a3b8; }
     .sheet-table th.th-col-b, .sheet-table th.th-col-link { background: #141f30; color: #94a3b8; min-width: 150px; }
     .col-pill { display: inline-block; padding: 1.5px 5px; border-radius: 4px; font-size: 8.5px; font-weight: 800; line-height: 1.2; margin-right: 4px; letter-spacing: .02em; vertical-align: middle; }
     .col-pill-num { background: #1e293b; color: #cbd5e1; }
@@ -311,95 +313,103 @@
     .switch-card:hover .platform-icon { transform: scale(1.07); }
     /* Fill the viewport; only the queue and the controls may scroll. */
     html, body { height: 100%; overflow: hidden; }
-    body { min-height: 0; height: 100dvh; padding: 0; }
-    .app-rail { inset: 0 auto auto 225px; width: auto; height: 48px; padding: 0; background: transparent; border: 0; flex-direction: row; }
+    body { min-height: 0; height: 100dvh; padding: 0; background: radial-gradient(circle at 15% 0%, #0f1b2d 0%, var(--bg) 55%); }
+    .app-rail { inset: 0 auto auto 220px; width: auto; height: 44px; padding: 0; background: transparent; border: 0; flex-direction: row; }
     .app-rail>.brand-mark, .rail-bottom { display: none; }
-    .rail-link { width: 34px; height: 32px; border-radius: 8px; }
-    .rail-nav { flex-direction: row; gap: 5px; }
-    .topbar { height: 48px; padding: 0 18px; }
-    .profile-mark { width: 28px; height: 28px; }
+    .rail-link { width: 32px; height: 30px; border-radius: 8px; }
+    .rail-nav { flex-direction: row; gap: 4px; }
+    .topbar { height: 44px; padding: 0 16px; background: rgba(13, 20, 34, 0.88); border-bottom: 1px solid rgba(51, 65, 85, 0.55); }
+    .profile-mark { width: 26px; height: 26px; }
     .date-label { font-size: 10px; padding: 0; }
-    .container { max-width: none; height: calc(100dvh - 48px); padding: 8px 12px 10px; display: grid; grid-template-columns: minmax(250px, 1fr) minmax(480px, 1.65fr); grid-template-rows: 56px minmax(0, 1fr); gap: 8px 16px; }
+    .container { max-width: none; height: calc(100dvh - 44px); padding: 6px 14px 8px; display: grid; grid-template-columns: minmax(240px, 1fr) minmax(480px, 1.75fr); grid-template-rows: 50px minmax(0, 1fr); gap: 6px 14px; }
     .page-heading { min-width: 0; margin: 0; align-items: center; }
-    h1 { font-size: 24px; margin: 0 0 3px; }
+    h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -.8px; }
     .eyebrow { display: none; }
     .page-description { font-size: 10px; }
     .overview { margin: 0; gap: 8px; align-self: stretch; }
-    .overview-item { padding: 6px 12px; gap: 10px; border-radius: 12px; }
-    .metric-icon { width: 30px; height: 30px; border-radius: 9px; }
-    .metric-label { font-size: 10px; }
-    .metric-value { margin-top: 2px; gap: 5px; }
-    .metric-value strong { font-size: 21px; }
+    .overview-item { padding: 5px 12px; gap: 10px; border-radius: 12px; background: linear-gradient(180deg, #131d31 0%, #0f172a 100%); border-color: rgba(51, 65, 85, 0.65); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+    .metric-icon { width: 28px; height: 28px; border-radius: 8px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); }
+    .metric-label { font-size: 9.5px; }
+    .metric-value { margin-top: 1px; gap: 5px; }
+    .metric-value strong { font-size: 20px; }
     .metric-value span { font-size: 9px; }
-    .workspace { grid-column: 1/-1; min-height: 0; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); grid-template-areas: 'queue controls'; gap: 10px; align-items: stretch; }
-    .controls-column { grid-area: controls; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
-    .card { padding: 12px; border-radius: 14px; }
+    .workspace { grid-column: 1/-1; min-height: 0; grid-template-columns: minmax(0, 1fr) 356px; grid-template-rows: minmax(0, 1fr); grid-template-areas: 'queue controls'; gap: 10px; align-items: stretch; }
+    .controls-column { grid-area: controls; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
+    .card { padding: 10px 12px; border-radius: 13px; background: linear-gradient(180deg, #131c2e 0%, #0f1726 100%); border-color: rgba(51, 65, 85, 0.65); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
     .workspace>.card, .controls-column>.card { animation-fill-mode: backwards; }
     .controls-column>.card { flex: none; }
-    .source-card { display: flex; flex-direction: column; gap: 8px; }
+    .source-card { display: flex; flex-direction: column; gap: 6px; padding: 9px 12px; }
     .sheet-source { padding: 0; border: 0; background: transparent; border-radius: 0; }
     .sheet-top { gap: 8px; }
-    .source-name { font-size: 12px; gap: 8px; }
-    .source-icon { width: 27px; height: 29px; }
-    .sheet-source .helper { margin: 5px 0 0; font-size: 9px; line-height: 1.5; }
-    .queue-footer { margin: 0; min-width: 0; gap: 5px; }
-    .queue-state { min-height: 22px; max-height: 26px; padding: 3px 7px; flex-shrink: 0; }
+    .source-name { font-size: 11.5px; gap: 7px; }
+    .source-icon { width: 24px; height: 24px; border-radius: 6px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); }
+    .sheet-source .helper { margin: 3px 0 0; font-size: 9px; line-height: 1.4; }
+    .queue-footer { margin: 0; min-width: 0; gap: 4px; }
+    .queue-state { min-height: 21px; max-height: 24px; padding: 2px 7px; flex-shrink: 0; }
     #sheetStatus { font-size: 9.5px; line-height: 1.3; }
     #sheetCountdown { display: none; }
     .queue-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
-    .queue-actions .btn { min-width: 0; min-height: 28px; padding: 3px 6px; font-size: 9.5px; border-radius: 7px; }
+    .queue-actions .btn { min-width: 0; min-height: 25px; padding: 2px 6px; font-size: 9.5px; border-radius: 7px; }
     #btnRun { grid-column: 1/-1; }
     #btnPauseQueue { grid-column: 1/-1; }
     .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnRun { grid-column: 1; }
     .queue-actions:has(#btnRun:not([hidden])):has(#btnPauseQueue:not([hidden])) #btnPauseQueue { grid-column: 2; }
-    .direct-link { margin: 0; padding-top: 6px; }
-    .direct-link summary { font-size: 10px; }
-    .direct-link[open]>summary { margin-bottom: 8px; }
-    .direct-link .url-input { padding: 8px 10px; font-size: 11px; }
-    .direct-link .helper { margin-top: 6px; font-size: 9px; }
-    .countdown-center-card { min-height: 0; padding: 10px 12px; gap: 3px; }
-    .clock-heading { font-size: 8px; letter-spacing: .06em; }
-    .clock-heading svg { width: 14px; height: 14px; }
-    .title-countdown { margin: 0; padding: 0; display: flex; align-items: center; gap: 12px; }
-    #titleCountdownValue { font-size: 34px; letter-spacing: -1.2px; flex: none; }
-    #titleCountdownLabel { margin: 0; font-size: 10px; line-height: 1.5; }
-    .clock-footer { padding-top: 4px; font-size: 8px; }
-    .platforms-card { display: flex; flex-direction: column; padding: 10px 12px; }
-    .platforms-card .section-heading { margin-bottom: 4px; }
-    .section-heading h2 { font-size: 12px; }
+    .direct-link { margin: 0; padding-top: 5px; }
+    .direct-link summary { font-size: 9.5px; line-height: 1.3; }
+    .direct-link[open]>summary { margin-bottom: 6px; }
+    .direct-link .url-input { padding: 6px 9px; font-size: 10.5px; }
+    .direct-link .helper { margin-top: 4px; font-size: 8.5px; }
+    .countdown-center-card { min-height: 0; padding: 8px 12px; gap: 2px; background: linear-gradient(145deg, #132035 0%, #0b1320 100%); border-color: rgba(56, 189, 248, 0.22); }
+    .clock-heading { font-size: 8px; letter-spacing: .07em; }
+    .clock-heading svg { width: 13px; height: 13px; }
+    .title-countdown { margin: 0; padding: 0; display: flex; align-items: center; gap: 10px; }
+    #titleCountdownValue { font-size: 28px; letter-spacing: -1px; flex: none; font-weight: 700; }
+    #titleCountdownLabel { margin: 0; font-size: 9.5px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; }
+    .clock-footer { padding-top: 3px; font-size: 8px; }
+    .platforms-card { display: flex; flex-direction: column; padding: 8px 12px; }
+    .platforms-card .section-heading { margin-bottom: 3px; }
+    .section-heading h2 { font-size: 11.5px; }
     .switches-container { min-height: 0; }
-    .switch-card { padding: 3px 0; min-height: 36px; }
-    .platform-lead { gap: 8px; }
-    .platform-icon { width: 27px; height: 27px; border-radius: 8px; }
-    .platform-name { font-size: 11px; }
-    .platform-desc { font-size: 9px; margin-top: 0; }
-    .platform-controls { gap: 7px; }
-    .ig-status-pill { max-width: 100px; }
-    .platform-helper { font-size: 9px; line-height: 1.5; margin-top: 4px; padding-top: 5px; }
-    .advanced summary { min-height: 44px; padding: 7px 12px; }
+    .switch-card { padding: 2px 0; min-height: 31px; gap: 6px; }
+    .platform-lead { gap: 7px; flex: 1; min-width: 0; }
+    .platform-icon { width: 25px; height: 25px; border-radius: 7px; }
+    .platform-name { font-size: 10.5px; }
+    .platform-desc { font-size: 8.5px; margin-top: 0; }
+    .platform-controls { gap: 6px; }
+    .ig-status-pill { max-width: 108px; font-size: 9px; padding: 2px 0; }
+    .platform-helper { font-size: 8.5px; line-height: 1.35; margin-top: 3px; padding-top: 4px; }
+    .advanced summary { min-height: 36px; padding: 5px 12px; }
     .summary-left { gap: 1px; }
-    .summary-left>span:first-child { font-size: 11px; }
-    .advanced[open] { position: fixed; top: 58px; right: 16px; width: 370px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 74px); z-index: 60; overflow: auto; box-shadow: 0 18px 75px rgba(0, 0, 0, 0.6); animation: none; }
+    .summary-left>span:first-child { font-size: 10.5px; }
+    .summary-pill { font-size: 8.5px; }
+    .advanced-body { padding: 10px 12px; gap: 8px; }
+    .advanced-grid { gap: 8px; }
+    .option-card { padding: 8px 10px; border-radius: 8px; }
+    .option-card-title { font-size: 10.5px; margin-bottom: 5px; }
+    .check-field { font-size: 10px; line-height: 1.4; gap: 6px; }
+    #captionLangSelect { padding: 5px 8px; font-size: 10.5px; border-radius: 7px; }
+    .advanced[open] { position: fixed; top: 52px; right: 14px; width: 370px; max-width: calc(100vw - 28px); max-height: calc(100dvh - 66px); z-index: 60; overflow: auto; box-shadow: 0 18px 75px rgba(0, 0, 0, 0.65); animation: none; }
     .advanced[open]>summary { position: sticky; top: 0; background: var(--card-bg); z-index: 1; border-bottom: 1px solid var(--card-border); }
     .sheet-panel { min-height: 0; height: 100%; padding: 0; display: flex; flex-direction: column; }
-    .sheet-panel-header { padding: 12px 14px 8px; flex: none; }
-    .sheet-panel-header .helper { margin: 2px 0 0; }
-    .sheet-toolbar { padding: 0 14px 8px; gap: 8px; flex: none; }
-    .sheet-search { max-width: 240px; flex: 1; padding: 6px 9px; }
+    .sheet-panel-header { padding: 10px 14px 6px; flex: none; }
+    .sheet-panel-header .helper { margin: 1px 0 0; }
+    .sheet-toolbar { padding: 0 14px 7px; gap: 8px; flex: none; }
+    .sheet-search { max-width: 240px; flex: 1; padding: 5px 9px; }
     .sheet-tabs { padding: 2px; }
-    .filter-btn { min-height: 30px; padding: 5px 10px; }
+    .filter-btn { min-height: 27px; padding: 4px 10px; }
     .sheet-list { min-height: 0; max-height: none; flex: 1; overscroll-behavior: contain; }
-    .sheet-table td { padding: 6.5px 10px; font-size: 11px; }
-    .sheet-table th { padding: 8px 10px; }
+    .sheet-table td { padding: 6px 10px; font-size: 11px; }
+    .sheet-table th { padding: 7px 10px; }
     .sheet-table th:first-child, .sheet-table td:first-child { width: 96px; padding-left: 10px; padding-right: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .sheet-table th.th-col-c, .sheet-table td.td-col-c { width: 105px; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
+    .sheet-table th.th-col-c, .sheet-table td.td-col-c { width: 124px; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+    #swCardYouTube .ig-status-pill { max-width: 78px; }
     .sheet-panel-note { flex: none; padding: 6px 14px; }
-    .status-box { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(650px, calc(100vw - 36px)); max-height: 25dvh; overflow: auto; z-index: 70; margin: 0; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4); }
-    .result-section { position: fixed; inset: 58px 16px 16px; margin: 0 auto; max-width: 1300px; z-index: 50; overflow: auto; box-shadow: 0 16px 100px rgba(0, 0, 0, 0.7); }
+    .status-box { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(650px, calc(100vw - 36px)); max-height: 25dvh; overflow: auto; z-index: 70; margin: 0; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45); }
+    .result-section { position: fixed; inset: 52px 14px 14px; margin: 0 auto; max-width: 1300px; z-index: 50; overflow: auto; box-shadow: 0 16px 100px rgba(0, 0, 0, 0.7); }
     .result-toolbar { position: sticky; top: -12px; display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 8px 0 12px; margin-bottom: 10px; z-index: 2; border-bottom: 1px solid var(--card-border); }
-    @media(min-width: 1500px) { .workspace { grid-template-columns: minmax(0, 1fr) 340px; } .platforms-card { padding: 12px 14px; } .switch-card { min-height: 42px; } }
+    @media(min-width: 1500px) { .workspace { grid-template-columns: minmax(0, 1fr) 376px; } .platforms-card { padding: 10px 14px; } .switch-card { min-height: 34px; } }
     @media(min-width: 761px) and (min-height: 900px) { .controls-column>.advanced[open] { position: relative; inset: auto; flex: 1; min-height: 140px; width: 100%; max-width: none; max-height: none; box-shadow: none; } .advanced[open]>summary { top: 0; } }
-    @media(max-width: 1100px) and (min-width: 761px) { .container { grid-template-columns: minmax(190px, 1fr) minmax(420px, 1.6fr); gap: 8px 12px; padding: 10px 12px; } .overview-item { padding: 8px; gap: 7px; } .metric-icon { display: none; } .workspace { grid-template-columns: minmax(0, 1fr) 300px; gap: 8px; } .page-description { max-width: 240px; } .sheet-tools a { display: none; } .sheet-toolbar { flex-wrap: wrap; } .sheet-search { min-width: 130px; max-width: none; } .sheet-table { min-width: 480px; } .local-badge { display: none; } .platform-controls { gap: 5px; } .ig-status-pill { max-width: 90px; } }
+    @media(max-width: 1100px) and (min-width: 761px) { .container { grid-template-columns: minmax(190px, 1fr) minmax(420px, 1.6fr); gap: 6px 12px; padding: 6px 12px; } .overview-item { padding: 6px 8px; gap: 7px; } .metric-icon { display: none; } .workspace { grid-template-columns: minmax(0, 1fr) 316px; gap: 8px; } .page-description { max-width: 240px; } .sheet-tools a { display: none; } .sheet-toolbar { flex-wrap: wrap; } .sheet-search { min-width: 130px; max-width: none; } .sheet-table { min-width: 480px; } .local-badge { display: none; } .platform-controls { gap: 4px; } .ig-status-pill { max-width: 86px; } }
     @media(max-width: 760px) {
       body { padding: 0; }
       .topbar { height: 44px; padding: 0 12px; }
@@ -581,14 +591,16 @@
           </div>
           <div class="switch-card" id="swCardYouTube">
             <div class="platform-lead">
-              <div class="platform-icon" aria-hidden="true" style="background:#2a171a;border:1px solid #5f252a;color:#ff4b55;font-weight:800">▶</div>
+              <div class="platform-icon yt-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.4 31.4 0 0 0 0 12a31.4 31.4 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31.4 31.4 0 0 0 24 12a31.4 31.4 0 0 0-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+              </div>
               <div class="platform-meta">
                 <span class="platform-name">YouTube Shorts</span>
-                <span class="platform-desc">Video dọc · không dùng âm thanh nguồn · cần quyền hình ảnh</span>
+                <span class="platform-desc" title="Video dọc · không dùng âm thanh nguồn · cần quyền hình ảnh">Video dọc · âm thanh sạch</span>
               </div>
             </div>
             <div class="platform-controls">
-              <button type="button" id="youtubeConnectBtn" class="ig-status-pill" title="Kết nối kênh YouTube">Kết nối</button>
+              <button type="button" id="youtubeConnectBtn" class="ig-status-pill" title="Kết nối kênh YouTube"><span id="youtubeDot" class="dot dot-gray"></span><span id="youtubeStatusText">Kết nối</span></button>
               <select id="youtubePublishMode" aria-label="Chế độ đăng YouTube" title="Áp dụng cho lượt chạy thủ công và link tiếp theo trong hàng đợi; không đổi video đã xếp hàng">
                 <option value="scheduled">Tự lên lịch</option>
                 <option value="now">Đăng ngay</option>
@@ -608,7 +620,7 @@
             <span>Tinh chỉnh nội dung</span>
             <span class="summary-pill">AI Gemini · Định dạng · Ngôn ngữ</span>
           </div>
-          <span style="font-size: 11px; color: var(--text-muted);">Mở rộng ▾</span>
+          <span style="font-size: 10.5px; color: var(--text-muted);">Mở rộng ▾</span>
         </summary>
         <div class="advanced-body">
           <div class="advanced-grid">
@@ -622,7 +634,7 @@
                 <option value="both">Anh + Việt</option>
                 <option value="raw">Tiếng Trung gốc</option>
               </select>
-              <div style="margin-top: 14px;">
+              <div style="margin-top: 8px;">
                 <label class="check-field">
                   <input type="checkbox" id="chkAsReel" checked>
                   <span>Tạo video dọc từ bộ ảnh (Reel 9:16, nhạc tự động)</span>
@@ -633,27 +645,27 @@
             <div class="option-card">
               <div class="option-card-title">
                 <span>Google Gemini AI (Tạo câu chuyện)</span>
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent); text-decoration: none;">Lấy key miễn phí ↗</a>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size: 10px; color: var(--accent); text-decoration: none;">Lấy key miễn phí ↗</a>
               </div>
-              <label class="check-field" style="margin-bottom: 8px;">
+              <label class="check-field" style="margin-bottom: 6px;">
                 <input type="checkbox" id="chkAddMoodText" checked>
                 <span>Chèn câu chuyện TikTok (YouTube không chèn chữ)</span>
               </label>
               <div class="key-input-row">
-                <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán API Key (AIzaSy...)" style="padding: 6px 10px; height: 32px; font-size: 12px;">
-                <button type="button" id="btnSaveGeminiKey" class="btn" style="padding: 0 12px; height: 32px; font-size: 11.5px; white-space: nowrap;">Lưu Key</button>
+                <input type="password" id="geminiApiKeyInput" class="url-input" placeholder="Dán API Key (AIzaSy...)" style="padding: 4px 8px; height: 28px; font-size: 11px;">
+                <button type="button" id="btnSaveGeminiKey" class="btn" style="padding: 0 10px; height: 28px; min-height: 28px; font-size: 10.5px; white-space: nowrap;">Lưu Key</button>
               </div>
-              <p id="geminiKeyStatus" class="helper" style="margin: 6px 0 0; font-size: 11px;">Đang kiểm tra kết nối AI…</p>
+              <p id="geminiKeyStatus" class="helper" style="margin: 4px 0 0; font-size: 10px; line-height: 1.35;">Đang kiểm tra kết nối AI…</p>
             </div>
           </div>
 
           <div id="moodTextContainer" class="option-card">
-            <div class="option-card-title">Ghi đè câu chuyện thủ công (mỗi dòng một câu · để trống để AI tự sinh)</div>
-            <textarea id="moodTextInput" class="url-input" rows="2" placeholder="Để trống: AI Gemini sẽ tự động viết câu chuyện phù hợp từng video. Hoặc tự điền từng dòng để cố định." style="font-size: 12px; line-height: 1.5;"></textarea>
+            <div class="option-card-title">Ghi đè câu chuyện thủ công (để trống để AI tự sinh)</div>
+            <textarea id="moodTextInput" class="url-input" rows="2" placeholder="Để trống: AI Gemini tự viết câu chuyện theo video, hoặc điền từng dòng cố định." style="padding: 6px 8px; font-size: 11px; line-height: 1.4;"></textarea>
           </div>
 
-          <p class="helper" style="font-size: 11.5px; margin: 0; line-height: 1.5;">
-            Caption được tối ưu theo nội dung. Bạn có thể tùy chỉnh ngôn ngữ, câu chuyện và định dạng trước khi đăng.
+          <p class="helper" style="font-size: 10px; margin: 0; line-height: 1.35;">
+            Caption tối ưu tự động. Tùy chỉnh ngôn ngữ, câu chuyện và định dạng trước khi đăng.
           </p>
         </div>
       </details>
@@ -1191,6 +1203,7 @@
         autoPostThreads: chkAutoPostThreads.checked,
         autoPostX: chkAutoPostX.checked,
         autoPostYouTube: chkAutoPostYouTube.checked,
+        youtubePublishMode: document.getElementById('youtubePublishMode').value,
         asReel: chkAsReel.checked,
         captionLang: captionLangSelect.value,
         enableMoodQuote: chkAddMoodText.checked
@@ -1234,6 +1247,9 @@
         chkAutoPostThreads.checked = Boolean(data.options.autoPostThreads);
         chkAutoPostX.checked = Boolean(data.options.autoPostX);
         chkAutoPostYouTube.checked = Boolean(data.options.autoPostYouTube);
+        if (['scheduled', 'now'].includes(data.options.youtubePublishMode)) {
+          document.getElementById('youtubePublishMode').value = data.options.youtubePublishMode;
+        }
         chkAsReel.checked = data.options.asReel;
         chkAddMoodText.checked = data.options.enableMoodQuote;
         captionLangSelect.value = data.options.captionLang;
@@ -1314,7 +1330,8 @@
     const moodTextInput = document.getElementById('moodTextInput');
     const moodTextContainer = document.getElementById('moodTextContainer');
 
-    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAutoPostYouTube, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
+    const youtubePublishModeSelect = document.getElementById('youtubePublishMode');
+    [chkAutoPostIG, chkAutoPostTikTok, chkAutoPostFB, chkAutoPostThreads, chkAutoPostX, chkAutoPostYouTube, youtubePublishModeSelect, chkAsReel, chkAddMoodText, captionLangSelect].forEach(input => {
       input.addEventListener('change', () => setTimeout(async () => {
         if (!sheetSettingsLoaded || threadsOnlyMode) return;
         try {
@@ -1419,12 +1436,17 @@
     const tiktokDot = document.getElementById('tiktokDot');
     const tiktokStatusText = document.getElementById('tiktokStatusText');
     const youtubeConnectBtn = document.getElementById('youtubeConnectBtn');
+    const youtubeDot = document.getElementById('youtubeDot');
+    const youtubeStatusText = document.getElementById('youtubeStatusText');
     async function checkYouTubeStatus() {
       try {
         const response = await fetch('/api/youtube/status', { cache: 'no-store' });
         const data = await response.json();
-        youtubeConnectBtn.textContent = data.connected ? `Đã kết nối · ${data.channel}` : (data.configured ? 'Kết nối' : 'Thiếu OAuth');
-        youtubeConnectBtn.title = data.connected ? `Kênh YouTube: ${data.channel}` : 'Kết nối kênh YouTube';
+        const label = data.connected ? (data.channel ? data.channel : 'Đã kết nối') : (data.configured ? 'Kết nối' : 'Thiếu OAuth');
+        if (youtubeStatusText) youtubeStatusText.textContent = label;
+        else youtubeConnectBtn.textContent = label;
+        if (youtubeDot) youtubeDot.className = `dot ${data.connected ? 'dot-green' : 'dot-gray'}`;
+        youtubeConnectBtn.title = data.connected ? `Kênh YouTube: ${data.channel || 'Đã kết nối'}` : 'Kết nối kênh YouTube';
         youtubeConnectBtn.classList.toggle('connected', Boolean(data.connected));
         const queueStatus = document.getElementById('youtubeQueueStatus');
         const queue = data.uploadQueue || {};
@@ -1441,7 +1463,7 @@
         queueStatus.hidden = summary.length === 0;
         queueStatus.textContent = summary.join(' · ');
         queueStatus.title = (queue.jobs || []).map(job => `${job.title || job.id}: ${job.status}${job.error ? ` — ${job.error}` : ''}`).join('\n');
-      } catch { youtubeConnectBtn.textContent = 'Chưa kết nối'; }
+      } catch { if (youtubeStatusText) youtubeStatusText.textContent = 'Chưa kết nối'; else youtubeConnectBtn.textContent = 'Chưa kết nối'; }
     }
     checkYouTubeStatus();
     setInterval(checkYouTubeStatus, 3000);

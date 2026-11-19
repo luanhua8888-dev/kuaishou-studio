@@ -202,27 +202,8 @@ export async function renderCinematicReel(imageInput, audioPath, outputPath, moo
         return;
       }
 
-      let isFull9x16 = false;
-      const dims = getImageDimensions(src);
-      if (dims && dims.width && dims.height) {
-        isFull9x16 = (dims.height / dims.width) >= 1.70;
-      } else {
-        try {
-          const { stdout: dimsOutput } = await execPromise(`ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${src}"`);
-          const [w, h] = dimsOutput.trim().split(',').map(Number);
-          if (w && h) isFull9x16 = (h / w) >= 1.70;
-        } catch {}
-      }
-
-      let vf;
-      if (isFull9x16) {
-        // Ảnh dọc chuẩn 9:16: lấp đầy toàn màn hình không viền mờ, sắc nét tối đa
-        vf = `scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
-      } else {
-        // Ảnh 4:5, 3:4, vuông 1:1 hoặc ngang: giữ nguyên 100% độ nét và bố cục gốc (không zoom vỡ hạt, không cắt góc)
-        // Nền mờ đồng sắc phía sau + ảnh chính nguyên bản sắc nét ở trung tâm
-        vf = `split[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,boxblur=25:5,eq=brightness=-0.12[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos[fg_fit];[bg_blur][fg_fit]overlay=(W-w)/2:(H-h)/2,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
-      }
+      // Lấp đầy toàn màn hình 9:16 sắc nét tối đa, không thu nhỏ ảnh trong viền mờ
+      const vf = `scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,unsharp=lx=5:ly=5:la=0.4:cx=5:cy=5:ca=0.0${quoteFilter}`;
 
       await execPromise(`ffmpeg -y -threads 0 -i "${src}" -vf "${vf}" -frames:v 1 "${framedPath}"`);
       framedImages[i] = framedPath;

@@ -821,13 +821,13 @@ const server = http.createServer(async (req, res) => {
               if (post.musicUrl && !validAudio) {
                 throw new Error('Không tải được âm thanh nguồn cho YouTube; chưa đăng video để tránh mất tiếng.');
               }
-              setPipelineProgress(jobId, 'Đang dựng YouTube Shorts sạch chữ, zoom mượt theo nhịp nhạc…');
+              setPipelineProgress(jobId, 'Đang dựng YouTube Shorts sạch chữ, nguyên khung 9:16 không thu nhỏ, không zoom…');
               youtubeVideoPath = path.join(outputDir, 'youtube_with_original_audio.mp4');
               try {
                 await createTikTokSlideshow(localImagePaths, validAudio, youtubeVideoPath, {
                   durationSeconds: 15,
                   secondsPerImage: 2.5,
-                  zoomAmount: 0.03,
+                  zoomAmount: 0,
                   sceneTexts: [],
                   beatSync: true,
                   loop: true,

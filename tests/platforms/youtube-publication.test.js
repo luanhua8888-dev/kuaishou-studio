@@ -34,10 +34,10 @@ test('publisher passes the selected mode, with scheduled as the safe default', a
   }
 });
 
-test('manual mode is included in manual requests but excluded from sheet options', () => {
+test('publication mode is included in both manual requests and sheet options', () => {
   const html = fs.readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /id="youtubePublishMode"/);
   assert.match(html, /autoPostYouTube: shouldPostYouTube,\s+youtubePublishMode,/);
   const options = html.slice(html.indexOf('function sheetOptions()'), html.indexOf('function renderSheetQueue('));
-  assert.doesNotMatch(options, /youtubePublishMode/);
+  assert.match(options, /youtubePublishMode/);
 });
